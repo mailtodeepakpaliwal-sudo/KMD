@@ -1,4 +1,4 @@
--- KMD One database setup — part 5 of 11. Run the parts in order, each once.
+-- KMD One database setup — kmd_db_part 5 of 11. Run in order, each once.
 -- Files: 20261004124254_archive_catalogue.sql … 20261028140000_online_payment_mode.sql
 
 -- ======================================================== migrations/20261004124254_archive_catalogue.sql

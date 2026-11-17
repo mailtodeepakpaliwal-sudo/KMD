@@ -1,4 +1,4 @@
--- KMD One database setup — part 8 of 11. Run the parts in order, each once.
+-- KMD One database setup — kmd_db_part 8 of 11. Run in order, each once.
 -- Files: 20261104083132_builtin_ai_key_status.sql … 20261107045020_ai_report_export_kind.sql
 
 -- ======================================================== migrations/20261104083132_builtin_ai_key_status.sql

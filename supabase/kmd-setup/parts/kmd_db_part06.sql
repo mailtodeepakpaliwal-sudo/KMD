@@ -1,4 +1,4 @@
--- KMD One database setup — part 6 of 11. Run the parts in order, each once.
+-- KMD One database setup — kmd_db_part 6 of 11. Run in order, each once.
 -- Files: 20261028140100_online_payments.sql … 20261031101234_staff_whatsapp_consent_and_gates.sql
 
 -- ======================================================== fee-migrations/20261028140100_online_payments.sql
@@ -4343,6 +4343,21 @@ end
 $$;
 
 -- ======================================================== fee-migrations/20261030230000_fee_writes_guard.sql
+-- KMD: a paste into the Supabase SQL Editor from Windows can turn line ends
+-- into CR LF, which the fee-function patch helpers cannot match. This strips
+-- the CR from one function's body; the helpers call it first.
+create or replace function vppsone.kmd_strip_cr(p_function regprocedure)
+returns void language plpgsql set search_path = '' as $$
+declare v_src text; v_def text;
+begin
+  select p.prosrc into v_src from pg_catalog.pg_proc p where p.oid = p_function;
+  if v_src is null or position(chr(13) in v_src) = 0 then return; end if;
+  v_def := pg_catalog.pg_get_functiondef(p_function);
+  if (length(v_def) - length(replace(v_def, v_src, ''))) <> length(v_src) then return; end if;
+  execute replace(v_def, v_src, replace(v_src, chr(13), ''));
+end $$;
+revoke all on function vppsone.kmd_strip_cr(regprocedure) from public, anon, authenticated, service_role;
+
 -- ============================================================================
 -- VPPS One fee-migration (One-only): the fee writes switch, enforced in the
 -- database (D-345; plan §2.7; critique0 #24).
@@ -4532,6 +4547,9 @@ begin
   if p_marker !~ '^-- \[vppsone:[a-z0-9-]+\]$' then
     raise exception 'marker must look like -- [vppsone:name], got %', p_marker;
   end if;
+  -- [KMD] tolerate CR LF from a Windows paste
+  perform vppsone.kmd_strip_cr(p_function);
+  p_preamble := replace(p_preamble, chr(13), '');
 
   select p.prosrc into strict v_src from pg_catalog.pg_proc p where p.oid = p_function;
 

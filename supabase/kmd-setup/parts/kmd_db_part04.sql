@@ -1,4 +1,4 @@
--- KMD One database setup — part 4 of 11. Run the parts in order, each once.
+-- KMD One database setup — kmd_db_part 4 of 11. Run in order, each once.
 -- Files: 20261004051300_attendance_whole_roster_save.sql … 20261004123341_export_kinds_for_workbooks.sql
 
 -- ======================================================== migrations/20261004051300_attendance_whole_roster_save.sql

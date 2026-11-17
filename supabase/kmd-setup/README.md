@@ -24,6 +24,14 @@ Part 1 (extensions) is **already applied** to the project.
 4. If a part shows an error, stop and send the message: don't run the next
    part.
 
+## If part 6 failed on "column-0 begin line"
+
+A paste from Windows turns line ends into CR LF, which the original fee
+patch helpers could not match. Parts 02–05 and the first 16 files of part 6
+are kept; run `resume/kmd_db_resume_01.sql` … `_05.sql` in order instead of
+the rest of part 6 and parts 07–11. The fixed helpers (in `override/`) now
+accept either line ending, so the current `parts/` work from any computer.
+
 ## Make yourself the admin
 
 1. Dashboard → Authentication → Users → **Add user** → your email and a

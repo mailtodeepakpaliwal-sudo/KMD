@@ -1,4 +1,4 @@
--- KMD One database setup — part 7 of 11. Run the parts in order, each once.
+-- KMD One database setup — kmd_db_part 7 of 11. Run in order, each once.
 -- Files: 20261031111241_staff_whatsapp_review_fixes.sql … 20261104055339_builtin_ai_live.sql
 
 -- ======================================================== migrations/20261031111241_staff_whatsapp_review_fixes.sql
@@ -708,6 +708,10 @@ begin
   if p_marker !~ '^\[vppsone:[a-z0-9-]+\]$' then
     raise exception 'marker must look like [vppsone:name], got %', p_marker;
   end if;
+  -- [KMD] tolerate CR LF from a Windows paste
+  perform vppsone.kmd_strip_cr(p_function);
+  p_old := replace(p_old, chr(13), '');
+  p_new := replace(p_new, chr(13), '');
   if position(p_marker in p_new) = 0 then
     raise exception 'the new text must carry the marker %', p_marker;
   end if;

@@ -1,4 +1,4 @@
--- KMD One database setup — part 9 of 11. Run the parts in order, each once.
+-- KMD One database setup — kmd_db_part 9 of 11. Run in order, each once.
 -- Files: 20261107070915_needs_attention_for_session.sql … 20261113205845_staff_helper_roles.sql
 
 -- ======================================================== migrations/20261107070915_needs_attention_for_session.sql

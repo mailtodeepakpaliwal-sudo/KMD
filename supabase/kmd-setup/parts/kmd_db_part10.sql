@@ -1,4 +1,4 @@
--- KMD One database setup — part 10 of 11. Run the parts in order, each once.
+-- KMD One database setup — kmd_db_part 10 of 11. Run in order, each once.
 -- Files: 20261114044459_class_tests.sql … 20261116033500_fees_copy_structure_catchup.sql
 
 -- ======================================================== migrations/20261114044459_class_tests.sql

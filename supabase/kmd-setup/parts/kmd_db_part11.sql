@@ -1,4 +1,4 @@
--- KMD One database setup — part 11 of 11. Run the parts in order, each once.
+-- KMD One database setup — kmd_db_part 11 of 11. Run in order, each once.
 -- Files: 20261116034500_message_log_rules_match_fees.sql … 90_kmd_finish.sql
 
 -- ======================================================== fee-migrations/20261116034500_message_log_rules_match_fees.sql
