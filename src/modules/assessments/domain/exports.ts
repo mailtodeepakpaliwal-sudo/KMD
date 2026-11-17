@@ -1,0 +1,21 @@
+import { t, type Localized } from "@/platform/i18n/language";
+
+/**
+ * What can leave the building, and what the log calls it.
+ *
+ * Kept apart from `report-card.ts` so the data layer can name an export kind
+ * without pulling the card-building arithmetic in with it.
+ */
+
+export const exportKinds = ["marks", "attendance", "report_cards", "students", "round", "ai_report"] as const;
+export type ExportKind = (typeof exportKinds)[number];
+
+export const exportKindLabels: Record<ExportKind, Localized> = {
+  marks: t("अंक", "Marks"),
+  attendance: t("उपस्थिति", "Attendance"),
+  report_cards: t("प्रगति पत्र", "Report cards"),
+  students: t("बच्चों की सूची", "Students"),
+  round: t("जानकारी का दौर", "Collection round"),
+  // The whole-year file for ChatGPT (Reports → AI report, 7 Nov 2026).
+  ai_report: t("AI रिपोर्ट", "AI report"),
+};

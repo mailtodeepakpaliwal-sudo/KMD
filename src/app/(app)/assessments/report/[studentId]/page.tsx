@@ -1,0 +1,472 @@
+import * as m from "@/messages/pairs";
+import { ms } from "@/messages/setup";
+import { requirePermission } from "@/platform/auth/current-staff";
+import { can } from "@/platform/auth/permissions";
+import { dayLabel, schoolToday } from "@/platform/dates";
+import { getSchoolName } from "@/platform/env";
+import { countOf, flat, primary, t } from "@/platform/i18n/language";
+import { pageTitle } from "@/platform/i18n/page-title";
+import { resolveSessionLabel } from "@/modules/academics/data/academics-repo";
+import { listAssessments } from "@/modules/assessments/data/assessments-repo";
+import {
+  issuedCards,
+  previewReportCard,
+} from "@/modules/assessments/data/reports-repo";
+import { currentTerm, termsByDate } from "@/modules/assessments/domain/assessments";
+import { isEmptyCard, markIn, readiness, reportColumns } from "@/modules/assessments/domain/report-card";
+import { IssueReportForm } from "@/modules/assessments/ui/assessment-forms";
+import { reportRefusals } from "@/modules/assessments/domain/report-refusals";
+import { PrintButton } from "@/modules/attendance/ui/print-button";
+import { Badge, Card, Notice, Section } from "@/ui/primitives";
+import { buttonClasses } from "@/ui/primitives/button";
+import { EmptyState } from "@/ui/states";
+import { subjectPair } from "@/vx/screens/exams/domain/groups";
+import { PageHeader } from "@/ui/page-header-localized";
+import Link from "@/ui/link";
+import { assertStudentVisible, notFoundUnlessVisible } from "@/platform/auth/test-session-access";
+
+export const runtime = "nodejs";
+
+export async function generateMetadata() {
+  return { title: await pageTitle(m.reportTitle) };
+}
+
+/**
+ * One child's report card.
+ *
+ * Two of them, really. The **preview** is built from today's marks and moves as
+ * they arrive; the **issued** card is what the school handed the family, frozen
+ * the moment somebody pressed the button. The screen says which it is showing,
+ * because on a document a family is holding the difference is the whole point:
+ * a mark corrected next week must not silently rewrite last week's card.
+ *
+ * It prints rather than rendering a PDF server-side, for the same reasons as
+ * the monthly attendance register (D-55): the browser already owns the paper
+ * size, the margins and the Devanagari fonts.
+ */
+export default async function ReportCardPage(
+  props: PageProps<"/assessments/report/[studentId]">,
+) {
+  const staff = await requirePermission(
+    "reports:view",
+    "/assessments",
+  );
+  const language = staff.language;
+  const { studentId } = await props.params;
+  const params = await props.searchParams;
+
+  const sessionLabel = await resolveSessionLabel();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(studentId)) await notFoundUnlessVisible(() => assertStudentVisible(staff, studentId));
+
+  if (!sessionLabel) {
+    return (
+      <>
+        <PageHeader eyebrow={m.eyebrowExams} title={m.reportTitle} language={language} back={BACK} />
+        <EmptyState title={m.noSessionFound} language={language} />
+      </>
+    );
+  }
+
+  const assessments = await listAssessments(sessionLabel);
+  // In the order they are sat, and opening on the current one — never the
+  // first label alphabetically, which on dev is a test term (B3, rule 3a).
+  const terms = termsByDate(assessments);
+
+  const requested = typeof params.term === "string" ? params.term : null;
+  const term = requested && terms.includes(requested) ? requested : (currentTerm(assessments, schoolToday()) ?? terms[0]);
+
+  if (!term) {
+    return (
+      <>
+        <PageHeader eyebrow={m.eyebrowExams} title={m.reportTitle} language={language} back={BACK} />
+        <EmptyState title={m.assessmentsNone} language={language} />
+      </>
+    );
+  }
+
+  const [preview, revisions] = await Promise.all([
+    previewReportCard({ studentId, sessionLabel, term }),
+    issuedCards({ studentId, sessionLabel, term }),
+  ]);
+  const issued = revisions.find((entry) => entry.status === "issued") ?? null;
+
+  if (!preview) {
+    return (
+      <>
+        <PageHeader eyebrow={m.eyebrowExams} title={m.reportTitle} language={language} back={BACK} />
+        <EmptyState title={m.notFound} language={language} />
+      </>
+    );
+  }
+
+  // The issued card wins when there is one: it is what the family is holding,
+  // and showing today's numbers under the same heading would be a quiet lie.
+  // Anything else is a draft, and says so on the page and on paper (P8).
+  const card = issued?.card ?? preview.card;
+  const isDraft = !issued;
+  const ready = readiness(preview.card);
+  const unsubmitted = preview.sources.papers.filter((paper) => paper.entryStatus !== "submitted");
+  const columns = reportColumns(card.rows);
+  // What stops this card being issued, said beside the button rather than
+  // after a press: an empty card is never one tap away (B3).
+  const issueBlocked = isEmptyCard(preview.card)
+    ? reportRefusals.no_marks
+    : !preview.scheme
+      ? reportRefusals.no_approved_scheme
+      : unsubmitted.length > 0
+        ? reportRefusals.papers_not_submitted
+        : !ready.ready
+          ? reportRefusals.incomplete
+          : null;
+
+  return (
+    <>
+      <div className="print:hidden">
+        <PageHeader eyebrow={m.eyebrowExams}
+          title={t(card.studentName, card.studentName)}
+          description={t(
+            `${m.reportTitle.hi} · ${term}`,
+            `${m.reportTitle.en} · ${term}`,
+          )}
+          language={language}
+          back={BACK}
+          action={<PrintButton />}
+        />
+
+        {terms.length > 1 ? (
+          <div className="mb-5 flex flex-wrap gap-2">
+            {terms.map((entry) => (
+              <Link
+                key={entry}
+                // Each chip is another full card render; prefetching all of
+                // them kept this page busy for minutes (B18).
+                prefetch={false}
+                href={`/assessments/report/${studentId}?term=${encodeURIComponent(entry)}`}
+                className={buttonClasses({
+                  variant: entry === term ? "primary" : "outline",
+                  size: "sm",
+                })}
+              >
+                {entry}
+              </Link>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Link
+            prefetch={false}
+            href={`/assessments/scheme?term=${encodeURIComponent(term)}`}
+            className={buttonClasses({ variant: "outline", size: "sm" })}
+          >
+            {primary(ms.reportSchemeLink, language)}
+          </Link>
+        </div>
+
+        {issued ? (
+          <Notice
+            className="mb-4"
+            tone="success"
+            text={m.reportFrozenHint}
+            language={language}
+          >
+            <span className="text-[13px]" data-report-issued={issued.revision}>
+              {primary(ms.reportRevision, language)} {issued.revision} · {primary(m.reportIssuedOn, language)}{" "}
+              {primary(dayLabel(issued.issuedAt.slice(0, 10)), language)}
+              {issued.issuedByName ? ` · ${issued.issuedByName}` : ""}
+            </span>
+          </Notice>
+        ) : (
+          <Notice
+            className="mb-4"
+            tone="neutral"
+            text={m.reportPreviewHint}
+            language={language}
+          />
+        )}
+
+        {!preview.scheme ? (
+          <Notice className="mb-4" tone="warning" text={ms.reportNoScheme} language={language} />
+        ) : null}
+
+        {unsubmitted.length > 0 ? (
+          <Notice className="mb-4" tone="warning" text={reportRefusals.papers_not_submitted} language={language}>
+            <span className="text-[13px]">{unsubmitted.map((paper) => paper.subjectCode).join(" · ")}</span>
+          </Notice>
+        ) : null}
+
+        {!ready.ready ? (
+          <Notice
+            className="mb-4"
+            tone="warning"
+            text={ready.note}
+            language={language}
+          >
+            {ready.subjects.length > 0 ? (
+              <span className="text-[13px]">{ready.subjects.join(" · ")}</span>
+            ) : null}
+          </Notice>
+        ) : null}
+      </div>
+
+      {/* ------------------------------------------------- the card */}
+
+      <article
+        className="relative rounded-2xl border border-border bg-surface p-5 print:rounded-none print:border-0 print:p-0"
+        data-report-state={isDraft ? "draft" : "issued"}
+      >
+        {/* A draft says so on the screen and on paper: a preview printed and
+            handed over must not pass for the card (P8). */}
+        {isDraft ? (
+          <p className="mb-3 rounded-lg border-2 border-dashed border-warning px-3 py-1.5 text-center text-[14px] font-bold uppercase tracking-wide text-warning-soft-foreground">
+            {flat(ms.reportDraftWatermark, language)}
+          </p>
+        ) : null}
+        <header className="mb-4 text-center">
+          <h1 className="text-[18px] font-bold text-foreground">
+            {(language === "hi" ? card.scheme?.headerHi : card.scheme?.headerEn) || getSchoolName()}
+          </h1>
+          <p className="text-[13px] text-muted-foreground">
+            {flat(m.reportTitle, language)} · {term} · {card.sessionLabel}
+            {!isDraft && issued ? ` · ${flat(ms.reportRevision, language)} ${issued.revision}` : ""}
+          </p>
+        </header>
+
+        <dl className="mb-4 grid grid-cols-2 gap-x-4 gap-y-1 text-[13px]">
+          <div className="flex gap-2">
+            <dt className="text-muted-foreground">
+              {primary(m.name, language)}
+            </dt>
+            <dd className="font-medium text-foreground">{card.studentName}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="text-muted-foreground">
+              {primary(m.teachClassTitle, language)}
+            </dt>
+            <dd className="font-medium text-foreground">{card.classLabel || "—"}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="text-muted-foreground">
+              {primary(m.studentRollNo, language)}
+            </dt>
+            <dd className="font-medium text-foreground">{card.rollNo ?? "—"}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="text-muted-foreground">
+              {primary(m.studentFather, language)}
+            </dt>
+            <dd className="font-medium text-foreground">{card.fatherName ?? "—"}</dd>
+          </div>
+        </dl>
+
+        {card.rows.length === 0 ? (
+          <EmptyState title={m.progressNoMarks} language={language} />
+        ) : (
+          <table className="w-full border-collapse text-[13px]">
+            <thead>
+              <tr>
+                <th
+                  scope="col"
+                  className="border border-border bg-surface-2 px-2 py-1.5 text-left font-semibold"
+                >
+                  {primary(m.reportSubject, language)}
+                </th>
+                {/* Every exam any subject sat, not the first row's: ELGA has
+                    no FA1, and a header built from it put every other
+                    subject's marks under the wrong heading (B5). */}
+                {columns.map((column) => (
+                  <th
+                    key={column.assessmentCode}
+                    scope="col"
+                    className="border border-border bg-surface-2 px-2 py-1.5 text-center font-semibold"
+                  >
+                    {column.assessmentCode}
+                    {column.maxMarks !== null ? (
+                      <span className="block text-[11px] font-normal text-muted-foreground">
+                        {primary(m.reportOutOf, language)} {column.maxMarks}
+                      </span>
+                    ) : null}
+                  </th>
+                ))}
+                <th
+                  scope="col"
+                  className="border border-border bg-surface-2 px-2 py-1.5 text-center font-semibold"
+                >
+                  {primary(m.progressTotal, language)}
+                </th>
+                <th
+                  scope="col"
+                  className="border border-border bg-surface-2 px-2 py-1.5 text-center font-semibold"
+                >
+                  %
+                </th>
+                <th
+                  scope="col"
+                  className="border border-border bg-surface-2 px-2 py-1.5 text-center font-semibold"
+                >
+                  {primary(m.progressGrade, language)}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {card.rows.map((row) => (
+                <tr key={row.subjectCode}>
+                  <th
+                    scope="row"
+                    className="border border-border px-2 py-1 text-left font-medium"
+                  >
+                    {subjectPair(row.subjectCode).en}
+                  </th>
+                  {columns.map((column) => {
+                    const mark = markIn(row, column.assessmentCode);
+                    return (
+                      <td
+                        key={`${row.subjectCode}-${column.assessmentCode}`}
+                        className="border border-border px-2 py-1 text-center tabular-nums"
+                      >
+                        {/* Four states, kept apart on the page a family reads: a
+                            mark, an absence, a paper nobody has marked, and an
+                            exam this subject was not part of (blank). */}
+                        {!mark
+                          ? ""
+                          : mark.exempt
+                            ? primary(m.marksExempt, language)
+                            : mark.absent
+                              ? primary(m.marksAbsent, language)
+                              : mark.value === null
+                                ? "—"
+                                : column.maxMarks === null
+                                  ? `${mark.value} / ${mark.maxMarks}`
+                                  : mark.value}
+                      </td>
+                    );
+                  })}
+                  <td className="border border-border px-2 py-1 text-center tabular-nums">
+                    {row.scored} / {row.outOf}
+                  </td>
+                  <td className="border border-border px-2 py-1 text-center tabular-nums">
+                    {row.percent === null ? "—" : row.percent}
+                  </td>
+                  <td className="border border-border px-2 py-1 text-center font-semibold">
+                    {row.grade ?? "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Badge tone="neutral">
+            {primary(m.progressTotal, language)} {card.totals.scored} /{" "}
+            {card.totals.outOf}
+          </Badge>
+          <Badge tone={(card.totals.percent ?? 0) >= 33 ? "success" : "warning"}>
+            {card.totals.percent === null ? "—" : `${card.totals.percent}%`}
+          </Badge>
+          {card.grade ? (
+            <Badge tone="accent">
+              {primary(m.progressGrade, language)} {card.grade}
+            </Badge>
+          ) : null}
+          {card.totals.missing > 0 ? (
+            <Badge tone="warning">
+              {card.totals.missing} {primary(m.progressMissing, language)}
+            </Badge>
+          ) : null}
+          {card.attendance ? (
+            <Badge tone="neutral">
+              {primary(m.reportAttendance, language)}{" "}
+              {countOf(card.attendance.present, card.attendance.counted, language)}
+              {card.attendance.percent !== null ? ` (${card.attendance.percent}%)` : ""}
+            </Badge>
+          ) : null}
+          {/* For the office, not the family: a count of days nobody took the
+              register is a fact about the school (U11). */}
+          {card.attendance?.notRecorded ? (
+            <Badge tone="warning" className="print:hidden">
+              {card.attendance.notRecorded} {primary(ms.reportAttendanceNotRecorded, language)}
+            </Badge>
+          ) : null}
+          {card.passed !== null && card.passed !== undefined ? (
+            <Badge tone={card.passed ? "success" : "warning"}>
+              {primary(card.passed ? ms.reportPassed : ms.reportNotPassed, language)}
+            </Badge>
+          ) : null}
+        </div>
+
+        {card.totals.weighted ? (
+          <p className="mt-2 text-[12px] text-muted-foreground print:hidden">
+            {primary(m.reportWeighted, language)}
+          </p>
+        ) : null}
+
+        {card.gradeDescription ? (
+          <p className="mt-2 text-[12px] text-muted-foreground">
+            {primary(card.gradeDescription, language)}
+          </p>
+        ) : null}
+
+        {card.scheme?.signatories.length ? (
+          <div className="mt-10 grid grid-cols-2 gap-6 text-center text-[12px] sm:grid-cols-3">
+            {card.scheme.signatories.map((line) => (
+              <div key={line.en} className="border-t border-border pt-1.5 text-muted-foreground">
+                {language === "hi" ? line.hi : line.en}
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </article>
+
+      <div className="print:hidden">
+        {!card.scheme ? (
+          <Notice
+            className="mt-4"
+            tone="neutral"
+            text={m.reportGradeDefault}
+            language={language}
+          />
+        ) : null}
+
+        {revisions.length > 0 ? (
+          <Section className="mt-6" title={ms.reportHistory} language={language}>
+            <ol className="space-y-2 text-[13px]">
+              {revisions.map((entry) => (
+                <li key={entry.id} className="rounded-xl border border-border bg-surface px-3 py-2">
+                  <p className="font-medium text-foreground">
+                    {primary(ms.reportRevision, language)} {entry.revision} ·{" "}
+                    {primary(entry.status === "issued" ? ms.reportCurrent : ms.reportSuperseded, language)} ·{" "}
+                    {primary(dayLabel(entry.issuedAt.slice(0, 10)), language)}
+                    {entry.issuedByName ? ` · ${entry.issuedByName}` : ""}
+                  </p>
+                  {entry.kind === "imported" ? (
+                    <p className="text-muted-foreground">{primary(ms.reportImported, language)}</p>
+                  ) : null}
+                  {entry.reason ? <p className="text-muted-foreground">“{entry.reason}”</p> : null}
+                </li>
+              ))}
+            </ol>
+          </Section>
+        ) : null}
+
+        {/* Issuing freezes a record, so it belongs to whoever runs the exams,
+            not to everybody who can read a report (D-206). */}
+        {can(staff, "assessments:manage") ? (
+          <Section className="mt-6" title={m.reportIssue} language={language}>
+            <Card className="p-4">
+              <IssueReportForm
+                key={`${studentId}/${term}/${issued?.revision ?? 0}`}
+                studentId={studentId}
+                term={term}
+                expectedRevision={issued?.revision ?? 0}
+                blocked={issueBlocked}
+              />
+            </Card>
+          </Section>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+const BACK = { href: "/assessments", label: m.assessmentsTitle };

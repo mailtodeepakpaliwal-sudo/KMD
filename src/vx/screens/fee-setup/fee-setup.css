@@ -1,0 +1,65 @@
+/* Fee setup (design `FeeSetup`): tab bar, class table, edit panel, due-date timeline, cards and the pending-changes bar. */
+
+:where(.vx, .vxt) .fs-f { display: flex; align-items: center; gap: 8px; min-width: 0; }
+:where(.vx, .vxt) .fs-c { display: flex; flex-direction: column; min-width: 0; }
+:where(.vx, .vxt) .fs-e { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+:where(.vx, .vxt) .fs-m { font-size: 12px; color: var(--mut); }
+:where(.vx, .vxt) .fs-tt { font-size: 15px; font-weight: 700; }
+:where(.vx, .vxt) .fs-h2 { font-family: "Source Serif 4", Georgia, serif; font-size: 22px; font-weight: 600; line-height: 1.2; }
+:where(.vx, .vxt) .fs-ib { display: flex; align-items: center; justify-content: center; flex: none; }
+:where(.vx, .vxt) .fs-sq { flex: none; width: 38px; height: 38px; padding: 0; }
+:where(.vx, .vxt) .fs-sq4 { flex: none; width: 44px; height: 44px; padding: 0; }
+:where(.vx, .vxt) .fs-t36 { width: 36px; height: 36px; border-radius: 11px; }
+:where(.vx, .vxt) .fs-dt { width: 10px; height: 10px; border-radius: 5px; flex: none; }
+:where(.vx, .vxt) .fs-big { min-width: 56px; font-size: 16px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+:where(.vx, .vxt) .fs-nt { display: flex; align-items: flex-start; gap: 10px; padding: 11px 14px; border-radius: 14px; font-size: 13px; line-height: 1.5; }
+:where(.vx, .vxt) .fs-rb { display: flex; align-items: center; gap: 12px; border: 0; background: transparent; color: var(--fg); text-align: left; width: 100%; }
+:where(.vx, .vxt) .fs-rp { position: relative; flex: 1; min-width: 0; }
+:where(.vx, .vxt) .fs-rp > span { position: absolute; left: 14px; top: 12px; color: var(--mut); }
+:where(.vx, .vxt) .fs-rp > input { padding-left: 30px; font-weight: 700; }
+:where(.vx, .vxt) .fs-ls > * + * { border-top: 1px solid var(--bd); }
+:where(.vx, .vxt) .fs-xi { animation: xIn .32s var(--ease) both; }
+:where(.vx, .vxt) .fs-ac { background: var(--accs); color: var(--accfg); }
+:where(.vx, .vxt) .fs-wa { background: var(--warns); color: var(--warnfg); }
+:where(.vx, .vxt) .fs-ok { background: var(--oks); color: var(--ok); }
+:where(.vx, .vxt) .fs-in { background: var(--infos); color: var(--info); }
+:where(.vx, .vxt) .fs-er { background: var(--bads); color: var(--bad); }
+:where(.vx, .vxt) .fs-nu { background: var(--s3); color: var(--mut); }
+:where(.vx, .vxt) .fs-pl { height: 28px; padding: 0 10px; font-size: 13px; }
+:where(.vx, .vxt) .fs-g2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+/* The design's buttons keep the browser's own line height. */
+:where(.vx, .vxt) .fs-lh button { line-height: normal; }
+
+.vx .fs-tabbar { position: sticky; top: 64px; z-index: 15; padding: 12px 28px; border-bottom: 1px solid var(--bd); background: var(--bg); }
+.vx .fs-seg { grid-template-columns: repeat(5, minmax(0, 1fr)); width: 660px; min-width: 600px; }
+.vx .fs-seg > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.vx .fs-scr { padding: 20px 28px 40px; display: flex; flex-direction: column; gap: 16px; }
+
+.vx .fs-lay { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.vx .fs-lay.has { grid-template-columns: minmax(0, 1fr) 420px; }
+.vx .fs-aside { position: sticky; top: 129px; height: calc(100dvh - 129px); overflow-y: auto; border-left: 1px solid var(--bd); background: var(--bg); display: flex; flex-direction: column; animation: xPush .36s var(--ease) both; }
+.vx .fs-foot { position: sticky; bottom: 0; display: flex; gap: 8px; padding: 12px 22px 16px; border-top: 1px solid var(--bd); }
+.vx .fs-foot > button { flex: 1; }
+.vx .fs-foot > button + button { flex: 1.6; }
+
+.vx .fs-thead { display: grid; gap: 8px; align-items: center; height: 42px; padding: 0 16px; background: var(--s2); border-bottom: 1px solid var(--bd); }
+.vx .fs-row { width: 100%; display: grid; gap: 8px; align-items: center; min-height: 60px; padding: 8px 16px; border: 0; border-top: 1px solid var(--bd); background: transparent; color: var(--fg); text-align: left; }
+.vx .fs-thead + .fs-row, .vx .fs-thead + .fs-band { border-top: 0; }
+.vx .fs-cell { padding: 0 6px; border-radius: 6px; }
+
+/* The pending-changes bar floats over the page's foot without taking room. */
+.vx .fs-pbar { position: sticky; bottom: 22px; z-index: 30; height: 0; display: flex; justify-content: center; align-items: flex-end; pointer-events: none; padding: 0 24px; }
+.vx .fs-pbar > div { min-width: 0; pointer-events: auto; display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 16px; min-height: 56px; border-radius: 18px; background: var(--tbg); color: var(--tfg); box-shadow: var(--shl); animation: xUp .42s var(--ease) both; }
+
+/* While a class is being edited on a phone, the page's own header stands in for the top bar. */
+.vx.fs-editing > header.vx-top.only-m:not(.fs-mtop) { display: none !important; }
+
+@container vx (max-width: 899px) {
+  .vx .fs-tabbar { top: 58px; padding: 12px 16px; }
+  .vx .fs-scr { gap: 14px; }
+  .vx .fs-lay.has { grid-template-columns: minmax(0, 1fr); }
+  .vx .fs-aside { position: static; height: auto; min-height: calc(100dvh - 58px - 96px - env(safe-area-inset-bottom)); overflow: visible; border-left: 0; animation: none; }
+  .vx .fs-foot { bottom: calc(76px + env(safe-area-inset-bottom)); padding: 12px 16px; }
+  .vx .fs-pbar { bottom: 88px; padding: 0 12px; }
+  .vx .fs-pbar > div { flex: 1; }
+}

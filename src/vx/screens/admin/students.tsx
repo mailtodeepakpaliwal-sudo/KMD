@@ -1,0 +1,966 @@
+"use client";
+
+import { Face } from "@/vx/ui/face";
+import Link from "@/ui/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+
+import { dateLabel, initials, rupees } from "@/vx/format";
+import { useVx } from "@/vx/i18n";
+import { Ic } from "@/vx/icons";
+import { NewMenu, SearchTrigger } from "@/vx/shell/top-actions";
+import { Select, Seg } from "@/vx/ui/controls";
+import { useToast } from "@/vx/ui/overlays";
+import { IntentLink } from "@/vx/ui/intent-link";
+import { Banner, TopBar } from "@/vx/ui/page";
+import { Btn, Pill } from "@/vx/ui/primitives";
+import { mobileOf, studentsHref, toCsv, type StudentFilter, type StudentSegment } from "@/vx/screens/admin/logic";
+import { ENROLLMENT_WORD, FILTER_WORD, StudentFilterSheet, type FilterChoice } from "@/vx/screens/admin/students-filter";
+import {
+  attendanceFigure,
+  classChipLabel,
+  groupByClass,
+  moneyStatus,
+  nextSort,
+  savedScroll,
+  scrollToRestore,
+  sortMode,
+  sortStudentRows,
+  studentBadges,
+  studentLayoutCookieValue,
+  studentProfileHref,
+  studentViewCookieValue,
+  STUDENT_LAYOUT_COOKIE,
+  STUDENT_VIEW_COOKIE,
+  STUDENTS_SCROLL_KEY,
+  type StudentBadge,
+  type StudentFacts,
+  type StudentLayout,
+  type StudentSort,
+  type StudentSortKey,
+  type StudentView,
+} from "@/vx/screens/admin/students-logic";
+import { ST } from "@/vx/screens/admin/students-text";
+import { StudentSearchForm, StudentSearchInput, StudentSearchProvider, StudentSearchStatus } from "@/vx/screens/admin/student-search";
+import { T } from "@/vx/screens/admin/text";
+
+import "./students.css";
+import { AssignmentLauncher, type AssignmentHandle } from "@/modules/teacher-tasks/ui/assignment-sheet";
+import { taskAssignMessages as ms } from "@/messages/task-assign";
+
+/*
+ * Students, as the design draws it: D01 on a desk (a sortable table, ticks and
+ * a floating bulk bar) and F05 on a phone (cards that swipe left for Call,
+ * WhatsApp and Collect). The URL is the state — search, class, view, chip,
+ * page and sort are query parameters — so Back and a pasted link keep working.
+ *
+ * Fees (the design's list: chips and money columns) is for `fees:view`, and is
+ * where such a reader starts (UI-89). School (class, attendance and a few
+ * facts) is everyone else's list, and stays one tap away for fee readers at
+ * the foot of the table.
+ *
+ * A whole row opens the child's profile; ticks, call, WhatsApp and Collect
+ * keep their own clicks. The name stays a real link, so the keyboard and a
+ * screen reader reach the profile the same way. Opening a profile remembers
+ * where the list was scrolled, and coming back to the same list puts it there.
+ */
+
+/** Clicks that land on one of these belong to that control, not to the row. */
+const OWN_CLICK = "a, button, input, select, textarea, label, summary, [role='button'], [role='checkbox'], [data-row-stop]";
+
+const YEAR_SECONDS = 60 * 60 * 24 * 365;
+
+/** The design's avatar tones, taken in turn down the list. */
+const TONES: [string, string][] = [
+  ["var(--accs)", "var(--accfg)"],
+  ["var(--infos)", "var(--info)"],
+  ["var(--oks)", "var(--ok)"],
+  ["var(--warns)", "var(--warnfg)"],
+  ["var(--s3)", "var(--fg)"],
+];
+
+function currentUrl(): string {
+  return `${window.location.pathname}${window.location.search}`;
+}
+
+function rememberScroll() {
+  try {
+    window.sessionStorage.setItem(STUDENTS_SCROLL_KEY, savedScroll(currentUrl(), window.scrollY, Date.now()));
+  } catch {
+    // Private mode or storage full: Back still works, it just starts at the top.
+  }
+}
+
+export type StudentListRow = {
+  id: string;
+  name: string;
+  sr: string | null;
+  photoUrl?: string | null;
+  classLabel: string;
+  /** The class's place in the school's order, for sorting by class on one page. */
+  classOrder?: number;
+  rollNo: string | null;
+  route: string | null;
+  parent: string | null;
+  phone: string | null;
+  money: { pendingToday: number; notDueYet: number; lateFee: number; percent: number } | null;
+  /** What the badges are made from. Money facts are empty without `fees:view`. */
+  facts: StudentFacts;
+};
+
+export type StudentsProps = {
+  enrollment?: "active"|"inactive"|"left"|"graduated"|"all";
+  sourceData?: boolean;
+  session: string;
+  rows: StudentListRow[];
+  total: number;
+  window: { page: number; pages: number; firstRow: number; lastRow: number };
+  q: string;
+  /** The class asked for in the URL (`?class=`); a class typed into the search box is not here. */
+  classId: string | null;
+  /** That class's name, for the chip that clears it. */
+  classLabel?: string | null;
+  /** Always "school" without `fees:view`. */
+  view: StudentView;
+  seg: StudentSegment;
+  /** Every fee filter on (the quick chip's among them); none means the whole roll. Empty in the School view. */
+  filters?: StudentFilter[];
+  /** How the phone draws the list (UI-94); the desk's table is the same in all three. */
+  layout?: StudentLayout;
+  /** How the list is ordered; across pages only name and class (A→Z). */
+  sort?: StudentSort;
+  classes: { id: string; label: string }[];
+  counts: Partial<Record<StudentSegment | StudentFilter, number | null>> | null;
+  seesMoney: boolean;
+  /** False when the attendance read failed: the column says "—", not "No attendance yet". */
+  attendanceRead: boolean;
+  /** The reader's staff id, which keys the remembered view to them. */
+  viewKey: string;
+  canCollect: boolean;
+  canAdmit: boolean;
+  canRemind: boolean;
+  /** Real financial lists stay on the canonical Fees service during coexistence. */
+  feesDirectoryHref?: string;
+  /** The quick actions this reader may open from "New" in the top bar. */
+  quick?: string[];
+  failed: boolean;
+  /** Rows ticked when the list first draws (the design fixture's D01). */
+  initialPicked?: string[];
+  taskAssignment?: { matchingIds: string[]; missing: string; fields: { key:string; hi:string; en:string }[] };
+};
+
+type Tx = ReturnType<typeof useVx>["tx"];
+
+function badgeLabel(badge: StudentBadge, tx: Tx): string {
+  switch (badge.kind) {
+    case "attendance":
+      return tx(ST.bAttendance(badge.present, badge.counted));
+    case "siblings":
+      return tx(ST.bSiblings(badge.count));
+    case "new":
+      return tx(ST.bNew);
+    case "route":
+      return tx(ST.bRoute(badge.route));
+    case "yearClear":
+      return tx(ST.bYearClear);
+    case "emi":
+      return tx(badge.status === "behind" ? ST.bEmiBehind : badge.status === "due" ? ST.bEmiDue : badge.status === "completed" ? ST.bEmiDone : ST.bEmi);
+    case "concession":
+      return tx(ST.bConcession(badge.label));
+  }
+}
+
+/** The period, reason and source behind a badge. */
+function badgeDetail(badge: StudentBadge, session: string, tx: Tx): string {
+  switch (badge.kind) {
+    case "attendance":
+      return tx(ST.dAttendance(session, badge.pct));
+    case "siblings":
+      return tx(ST.dSiblings);
+    case "new":
+      return tx(ST.dNew(session));
+    case "route":
+      return tx(ST.dRoute);
+    case "yearClear":
+      return tx(ST.dYearClear(session));
+    case "emi": {
+      const line = tx(ST.dEmi(rupees(badge.monthly), badge.nextDue ? dateLabel(badge.nextDue) : null));
+      return badge.status === "behind" ? `${line} · ${tx(ST.dEmiBehind)}` : line;
+    }
+    case "concession":
+      return tx(ST.dConcession);
+  }
+}
+
+/** Up to three factual badges, then "+N details" that opens the rest in place. */
+function Badges({ shown, more, session, open, onToggle }: { shown: StudentBadge[]; more: StudentBadge[]; session: string; open: boolean; onToggle: () => void }) {
+  const { tx } = useVx();
+  if (shown.length === 0 && more.length === 0) return null;
+  return (
+    <span style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+      <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+        {shown.map((badge, i) => (
+          <span key={`${badge.kind}-${i}`} title={badgeDetail(badge, session, tx)} style={{ display: "inline-flex" }}>
+            <Pill tone={badge.tone} style={{ fontSize: 11.5 }}>{badgeLabel(badge, tx)}</Pill>
+          </span>
+        ))}
+        {more.length > 0 ? (
+          <button
+            type="button"
+            className="tap"
+            aria-expanded={open}
+            onClick={onToggle}
+            style={{ border: 0, background: "none", padding: "2px 4px", fontSize: 12, fontWeight: 600, color: "var(--pri)", cursor: "pointer" }}
+          >
+            {open ? tx(ST.lessDetails) : tx(ST.moreDetails(more.length))}
+          </button>
+        ) : null}
+      </span>
+      {open && more.length > 0 ? (
+        <ul data-row-stop style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 4, cursor: "auto" }}>
+          {more.map((badge, i) => (
+            <li key={`${badge.kind}-${i}`} style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "2px 8px", fontSize: 12 }}>
+              <Pill tone={badge.tone} style={{ fontSize: 11.5 }}>{badgeLabel(badge, tx)}</Pill>
+              <span style={{ color: "var(--mut)" }}>{badgeDetail(badge, session, tx)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </span>
+  );
+}
+
+/** The design's tick box: a 22px rounded square, filled when on, a dash when some are. */
+function Tick({ on, some, label, onToggle }: { on: boolean; some?: boolean; label: string; onToggle: () => void }) {
+  const filled = on || some;
+  return (
+    <button type="button" role="checkbox" aria-checked={on ? true : some ? "mixed" : false} aria-label={label} onClick={onToggle} className="tap stu-tick" data-on={filled ? "" : undefined}>
+      <Ic n={on || !some ? "check" : "minus"} size={14} stroke={3} style={{ opacity: filled ? 1 : 0 }} />
+    </button>
+  );
+}
+
+function withSort(href: string, sort: StudentSort | null): string {
+  if (!sort || (sort.key === "name" && sort.dir === 1)) return href;
+  const url = new URL(href, "https://students.invalid");
+  url.searchParams.set("sort", sort.key);
+  if (sort.dir === -1) url.searchParams.set("dir", "desc");
+  return `${url.pathname}${url.search}`;
+}
+
+/** The missing-details filter rides on links beside the others; "" drops it. */
+function withMissing(href: string, missing: string | undefined): string {
+  const url = new URL(href, "https://students.invalid");
+  if (missing) url.searchParams.set("missing", missing);
+  else url.searchParams.delete("missing");
+  url.searchParams.delete("page");
+  return `${url.pathname}${url.search}`;
+}
+function withEnrollment(href:string,status:StudentsProps["enrollment"]):string {
+  const url=new URL(href,"https://students.invalid");
+  if(status)url.searchParams.set("status",status);else url.searchParams.delete("status");
+  return `${url.pathname}${url.search}`;
+}
+
+export function StudentsScreen(props: StudentsProps) {
+  const { tx, language } = useVx();
+  const toast = useToast();
+  const router = useRouter();
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(props.initialPicked ?? []));
+  const [opened, setOpened] = useState<Set<string>>(new Set());
+  const onePage = props.window.pages <= 1;
+  const [sort, setSort] = useState<StudentSort>(props.sort ?? { key: "name", dir: 1 });
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const askPicked = useRef<AssignmentHandle>(null);
+  const filters =props.filters ?? (props.seg !== "all" ? [props.seg] : []);
+  const layout = props.layout ?? "cards";
+  const filtered = props.q !== "" || props.classId !== null || filters.length > 0;
+  const fees = props.seesMoney && props.view === "fees";
+  // Written into every link only for a reader who has two views to choose from.
+  const viewParam = props.seesMoney ? props.view : undefined;
+  // The layout rides on links too, so a page or a chip keeps it where the cookie could not be written.
+  const lookParam = layout !== "cards" ? layout : undefined;
+  // Across pages the server's order rides on every link; on one page the sort is in place.
+  const serverSort = !onePage && sort.key === "class" ? sort : null;
+  const here = { q: props.q, classId: props.classId, view: viewParam, segs: filters, look: lookParam };
+  const missing = props.taskAssignment?.missing ?? "";
+  const missingOptions = props.taskAssignment
+    ? [{ value: "photo", label: ms.taskNoPhoto }, ...props.taskAssignment.fields.map((f) => ({ value: f.key, label: { hi: f.hi, en: f.en } }))]
+    : [];
+  const missingLabel = missingOptions.find((o) => o.value === missing)?.label;
+  const hrefFor = (query: Parameters<typeof studentsHref>[0], order: StudentSort | null = serverSort) => {
+    const href = withEnrollment(withSort(studentsHref({ ...here, ...query }), order),props.enrollment);
+    // A page link keeps its page; withMissing would drop it.
+    return missing ? `${href}${href.includes("?") ? "&" : "?"}missing=${encodeURIComponent(missing)}` : href;
+  };
+  const returnTo = hrefFor({ page: props.window.page });
+  // By class reads in class order: the server's across pages, this page's own otherwise.
+  const rows = layout === "class" ? sortStudentRows(props.rows, { key: "class", dir: 1 }) : onePage ? sortStudentRows(props.rows, sort) : props.rows;
+  // A money order across pages cannot be honest; the phone says so instead of pretending (ST.sortPendingNote).
+  const moneySortIdle = !onePage && layout !== "class" && (sort.key === "pending" || sort.key === "notdue" || sort.key === "paid");
+
+  // Back from a profile: put the list where it was, once, and only for the same list.
+  useEffect(() => {
+    let raw: string | null = null;
+    try {
+      raw = window.sessionStorage.getItem(STUDENTS_SCROLL_KEY);
+    } catch {
+      return;
+    }
+    const y = scrollToRestore(raw, currentUrl(), Date.now());
+    if (y === null) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const frame = window.requestAnimationFrame(() => {
+      window.scrollTo(0, y);
+      try {
+        window.sessionStorage.removeItem(STUDENTS_SCROLL_KEY);
+      } catch {
+        // Nothing to clean up if storage is unavailable.
+      }
+      // Late layout (fonts, the row fade-in) can pull a short page back up; one more try.
+      timer = setTimeout(() => {
+        if (window.scrollY < 4) window.scrollTo(0, y);
+      }, 150);
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
+
+  const pickView = (next: StudentView) => {
+    if (next === props.view) return;
+    try {
+      document.cookie = `${STUDENT_VIEW_COOKIE}=${studentViewCookieValue(props.viewKey, next)}; path=/; max-age=${YEAR_SECONDS}; samesite=lax`;
+    } catch {
+      // Not remembered, but the URL still opens the view chosen.
+    }
+    router.push(withEnrollment(studentsHref({ q: props.q, classId: props.classId, view: next, look: lookParam }),next==="fees"?props.enrollment:undefined));
+  };
+
+  /** The Filter sheet's choices as one navigation: class, filters, order and layout together. */
+  const applyChoice = (next: FilterChoice) => {
+    setSheetOpen(false);
+    const remember = (name: string, value: string) => {
+      try {
+        document.cookie = `${name}=${value}; path=/; max-age=${YEAR_SECONDS}; samesite=lax`;
+      } catch {
+        // Not remembered; the URL still carries it.
+      }
+    };
+    if (props.seesMoney && next.view !== props.view) remember(STUDENT_VIEW_COOKIE, studentViewCookieValue(props.viewKey, next.view));
+    if (next.layout !== layout) remember(STUDENT_LAYOUT_COOKIE, studentLayoutCookieValue(props.viewKey, next.layout));
+    const href = studentsHref({
+      q: props.q,
+      classId: next.classId,
+      view: props.seesMoney ? next.view : undefined,
+      segs: next.view === "fees" ? next.filters : [],
+      look: next.layout !== "cards" ? next.layout : undefined,
+    });
+    setSort(next.sort);
+    const sorted = next.sort.key === "name" && next.sort.dir === 1 ? href : withSort(href, next.sort);
+    router.push(withEnrollment(props.taskAssignment ? withMissing(sorted, next.missing) : sorted,next.view==="fees"?(next.enrollment ?? props.enrollment):undefined));
+  };
+  const pickMissing = (value: string) => router.push(withMissing(`${location.pathname}${location.search}`, value));
+
+  // The fee list orders by class in the database; this app's directory only by name.
+  const modeOf = (key: StudentSortKey) => {
+    const mode = sortMode(key, onePage);
+    return mode === "server" && key === "class" && !props.seesMoney ? null : mode;
+  };
+
+  const sortBy = (key: StudentSortKey) => {
+    const mode = modeOf(key);
+    if (mode === "page") {
+      const next = nextSort(sort, key);
+      setSort(next);
+      try {
+        const url = withEnrollment(withSort(studentsHref(here), next),props.enrollment);
+        window.history.replaceState(window.history.state, "", url);
+      } catch {
+        // The order holds on screen; only a reload forgets it.
+      }
+    } else if (mode === "server") {
+      router.push(withEnrollment(withSort(studentsHref(here), { key, dir: 1 }),props.enrollment));
+    }
+  };
+
+  const toggleOpen = (id: string) =>
+    setOpened((all) => {
+      const copy = new Set(all);
+      if (copy.has(id)) copy.delete(id);
+      else copy.add(id);
+      return copy;
+    });
+
+  /**
+   * A click anywhere on a row opens the profile through the row's own name
+   * link — so prefetch, Ctrl/⌘-click and the back trail all behave exactly as
+   * if the name had been clicked. Clicks on a control, or the end of a text
+   * selection, are left alone.
+   */
+  const onListClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const target = event.target as Element | null;
+    if (!target) return;
+    if (target.closest("a[data-row-link]")) {
+      // A modified click opens a new tab; this list is not being left.
+      if (!event.ctrlKey && !event.metaKey && !event.shiftKey) rememberScroll();
+      return;
+    }
+    if (target.closest(OWN_CLICK)) return;
+    if ((window.getSelection()?.toString() ?? "") !== "") return;
+    const row = target.closest("[role='row']");
+    if (!row || !event.currentTarget.contains(row)) return;
+    const link = row.querySelector<HTMLAnchorElement>("a[data-row-link]");
+    if (!link) return;
+    link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: event.ctrlKey, metaKey: event.metaKey, shiftKey: event.shiftKey, altKey: event.altKey }));
+  };
+
+  const toggle = (id: string) =>
+    setPicked((all) => {
+      const copy = new Set(all);
+      if (copy.has(id)) copy.delete(id);
+      else copy.add(id);
+      return copy;
+    });
+  const allOn = rows.length > 0 && rows.every((row) => picked.has(row.id));
+  const someOn = rows.some((row) => picked.has(row.id));
+
+  const exportRows = (list: StudentListRow[]) => {
+    const header = ["Name", "SR", "Class", "Roll", "Route", "Phone", ...(props.seesMoney ? ["Pending today", "Not due yet", "Late fee", "Year paid %"] : [])];
+    const body = list.map((row) => [
+      row.name,
+      row.sr,
+      row.classLabel,
+      row.rollNo,
+      row.route,
+      row.phone,
+      ...(props.seesMoney && row.money ? [row.money.pendingToday, row.money.notDueYet, row.money.lateFee, row.money.percent] : []),
+    ]);
+    const blob = new Blob([`﻿${toCsv(header, body)}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `students-${props.session}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.show({ text: tx(T.exported(list.length)), tone: "ok" });
+  };
+
+  const badgesFor = (row: StudentListRow, only?: StudentBadge["kind"]) => {
+    const all = studentBadges(row.facts, { view: props.view, seesMoney: props.seesMoney });
+    const shown = only ? all.shown.filter((b) => b.kind === only) : all.shown;
+    const more = only ? all.more.filter((b) => b.kind === only) : all.more;
+    return <Badges shown={shown} more={more} session={props.session} open={opened.has(row.id)} onToggle={() => toggleOpen(row.id)} />;
+  };
+
+  const attendanceCell = (row: StudentListRow) => {
+    if (!props.attendanceRead) return <span style={{ color: "var(--sub)" }}>—</span>;
+    const figure = attendanceFigure(row.facts.attendance);
+    if (!figure) return <span style={{ fontSize: 12.5, color: "var(--mut)" }}>{tx(ST.noAttendance)}</span>;
+    return (
+      <span style={{ display: "inline-flex", flexDirection: "column", minWidth: 0 }} title={tx(ST.dAttendance(props.session, figure.pct))}>
+        <span className="num" style={{ fontWeight: 600 }}>{tx(ST.attendanceDays(figure.present, figure.counted))}</span>
+        {figure.pct !== null ? <span className="num" style={{ fontSize: 12, color: "var(--mut)" }}>{tx(ST.attendancePct(figure.pct))}</span> : null}
+      </span>
+    );
+  };
+
+  /* ------------------------------------------------------------ the table */
+
+  type Col = { key: string; label: string; sort?: StudentSortKey; align?: "right"; pad?: string };
+  const cols: Col[] = fees
+    ? [
+        { key: "name", label: tx(T.colStudent), sort: "name" },
+        { key: "class", label: tx(T.colClass), sort: "class" },
+        { key: "route", label: tx(T.colRoute) },
+        { key: "pending", label: tx(ST.colPendingToday), sort: "pending", align: "right" },
+        { key: "notdue", label: tx(ST.colNotDueYet), sort: "notdue", align: "right" },
+        { key: "paid", label: tx(T.colYearPaid), sort: "paid" },
+        { key: "act", label: "" },
+      ]
+    : [
+        { key: "name", label: tx(T.colStudent), sort: "name" },
+        { key: "class", label: tx(T.colClass), sort: "class" },
+        { key: "attendance", label: tx(ST.colAttendance) },
+        { key: "details", label: tx(ST.colDetails) },
+        { key: "act", label: "" },
+      ];
+  // Every column can give some width back, so the table fits whatever a desk leaves it: the old fixed
+  // minimums summed to 1,078px and cut the Call / WhatsApp / Collect buttons off on a 1366px laptop and
+  // half of them at 1100px (desk check, 7 Nov). From 1,100px wide they are the design's widths again.
+  const tracks = fees
+    ? "48px minmax(180px,2.2fr) minmax(84px,1.2fr) minmax(72px,96px) minmax(88px,130px) minmax(88px,130px) minmax(100px,1.3fr) 120px"
+    : "48px minmax(180px,2.2fr) minmax(84px,1.2fr) minmax(110px,1fr) minmax(160px,2fr) 96px";
+
+  const headCell = (c: Col): ReactNode => {
+    const mode = c.sort ? modeOf(c.sort) : null;
+    if (!c.sort || !mode) {
+      return (
+        <span role="columnheader" key={c.key} className="stu-th" style={{ justifyContent: c.align === "right" ? "flex-end" : "flex-start" }}>
+          <span className="stu-thl" title={c.sort ? tx(ST.sortOnePage) : undefined}>{c.label}</span>
+        </span>
+      );
+    }
+    const on = sort.key === c.sort;
+    return (
+      <span role="columnheader" key={c.key} className="stu-th" aria-sort={on ? (sort.dir === 1 ? "ascending" : "descending") : undefined} style={{ justifyContent: c.align === "right" ? "flex-end" : "flex-start" }}>
+        <button type="button" className="tap stu-sort" data-on={on ? "" : undefined} onClick={() => sortBy(c.sort!)} aria-label={tx(ST.sortBy(c.label))}>
+          {c.label}
+          <Ic n="arrowUp" size={14} style={{ opacity: on ? 1 : 0.25, transform: on && sort.dir === -1 ? "rotate(180deg)" : "none", transition: "transform .25s var(--ease), opacity .2s" }} />
+        </button>
+      </span>
+    );
+  };
+
+  const nameCell = (row: StudentListRow, i: number) => {
+    const [bg, fg] = TONES[i % TONES.length];
+    return (
+      <span role="cell" style={{ minWidth: 0 }}>
+        <span className="stu-name">
+          <Face className="stu-ava" style={{ background: bg, color: fg }} photo={row.photoUrl ?? null} zoom={row.name} zoomSub={row.classLabel}>{initials(row.name)}</Face>
+          <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+            <IntentLink feedback href={studentProfileHref(row.id, returnTo)} data-row-link="" className="stu-link">
+              <span className="clip" style={{ fontSize: 14, fontWeight: 600 }}>{row.name}</span>
+            </IntentLink>
+            <span className="clip" style={{ fontSize: 12, color: "var(--mut)" }}>{[row.sr ? `SR ${row.sr}` : null, row.parent].filter(Boolean).join(" · ") || "—"}</span>
+            {/* An EMI plan is the one fact the money columns cannot show. */}
+            {fees ? badgesFor(row, "emi") : null}
+          </span>
+        </span>
+      </span>
+    );
+  };
+
+  const actions = (row: StudentListRow, desk: boolean) => {
+    const mobile = mobileOf(row.phone);
+    const who = row.parent ?? row.name;
+    if (desk) {
+      return (
+        <span role="cell" className="stu-ra">
+          {mobile ? (
+            <>
+              <a href={`tel:${mobile}`} className="tap btn ghost stu-ib" aria-label={tx(ST.callParent(who))} style={{ color: "var(--info)" }}>
+                <Ic n="phone" />
+              </a>
+              <a href={`https://wa.me/91${mobile}`} target="_blank" rel="noreferrer" className="tap btn ghost stu-ib" aria-label={tx(ST.whatsappParent(who))} style={{ color: "var(--ok)" }}>
+                <Ic n="message" />
+              </a>
+            </>
+          ) : null}
+          {props.canCollect && fees ? (
+            <Link prefetch={false} href={`/payments?student=${row.id}`} className="tap btn soft stu-ib" aria-label={tx(ST.collectFrom(row.name))}>
+              <Ic n="rupee" />
+            </Link>
+          ) : null}
+        </span>
+      );
+    }
+    if (!mobile && !props.canCollect) return null;
+    return (
+      <div className="stu-acts" data-row-stop>
+        {mobile ? (
+          <>
+            <a href={`tel:${mobile}`} className="tap" aria-label={tx(ST.callParent(who))} style={{ background: "var(--infos)", color: "var(--info)" }}>
+              <Ic n="phone" />
+              {tx(T.call)}
+            </a>
+            <a href={`https://wa.me/91${mobile}`} target="_blank" rel="noreferrer" className="tap" aria-label={tx(ST.whatsappParent(who))} style={{ background: "var(--oks)", color: "var(--ok)" }}>
+              <Ic n="message" />
+              {tx(T.whatsapp)}
+            </a>
+          </>
+        ) : null}
+        {props.canCollect ? (
+          <Link prefetch={false} href={`/payments?student=${row.id}`} className="tap" aria-label={tx(ST.collectFrom(row.name))} style={{ background: "var(--pri)", color: "var(--prifg)" }}>
+            <Ic n="rupee" />
+            {tx(T.collect)}
+          </Link>
+        ) : null}
+      </div>
+    );
+  };
+
+  const moneyLine = (row: StudentListRow): ReactNode => {
+    if (!row.money) {
+      const figure = props.attendanceRead ? attendanceFigure(row.facts.attendance) : null;
+      return figure ? (
+        <>
+          <span className="num" style={{ fontSize: 14, fontWeight: 700 }}>{tx(ST.attendanceDays(figure.present, figure.counted))}</span>
+          <span style={{ fontSize: 11, color: "var(--mut)" }}>{tx(ST.colAttendance)}</span>
+        </>
+      ) : null;
+    }
+    const st = moneyStatus(row.money);
+    if (st.kind === "pending") {
+      return (
+        <>
+          <span className="num" style={{ fontSize: 14, fontWeight: 700, color: "var(--bad)" }}>{rupees(st.amount)}</span>
+          <span style={{ fontSize: 11, color: "var(--mut)" }}>{tx(ST.pendingToday)}</span>
+        </>
+      );
+    }
+    if (st.kind === "track") {
+      return (
+        <>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>{tx(ST.onTrack)}</span>
+          <span className="num" style={{ fontSize: 11, color: "var(--mut)" }}>{tx(ST.later(rupees(st.amount)))}</span>
+        </>
+      );
+    }
+    return (
+      <>
+        <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ok)" }}>{tx(ST.paidUp)}</span>
+        <span style={{ fontSize: 11, color: "var(--mut)" }}>{tx(ST.yearClear)}</span>
+      </>
+    );
+  };
+
+  /** The design's phone card (F05): swipes left for Call · WhatsApp · Collect. */
+  const mCard = (row: StudentListRow, i: number) => {
+    const [bg, fg] = TONES[i % TONES.length];
+    const meta = [row.classLabel, row.sr ? `SR ${row.sr}` : null, fees ? row.route : null].filter(Boolean).join(" · ");
+    return (
+      <div key={row.id} className="hs stu-swipe rise" style={{ animationDelay: `${Math.min(i * 8, 56)}ms` }}>
+        <IntentLink feedback href={studentProfileHref(row.id, returnTo)} data-row-link="" aria-label={row.name} className="tap card stu-mcard">
+          <Face className="stu-ava" style={{ width: 46, height: 46, borderRadius: 23, fontSize: 15, background: bg, color: fg }} photo={row.photoUrl ?? null} zoom={row.name} zoomSub={row.classLabel}>{initials(row.name)}</Face>
+          <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+            <span className="clip" style={{ fontSize: 15, fontWeight: 600 }}>{row.name}</span>
+            <span className="clip" style={{ fontSize: 13, color: "var(--mut)" }}>{meta}</span>
+          </span>
+          <span style={{ flex: "none", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>{moneyLine(row)}</span>
+        </IntentLink>
+        {actions(row, false)}
+      </div>
+    );
+  };
+
+  /** The money in one word for a compact line: the amount pending today, On track or Paid up. */
+  const moneyShort = (row: StudentListRow): ReactNode => {
+    if (!row.money) {
+      const figure = props.attendanceRead ? attendanceFigure(row.facts.attendance) : null;
+      return figure ? <span className="num" style={{ color: "var(--mut)" }}>{tx(ST.attendanceDays(figure.present, figure.counted))}</span> : null;
+    }
+    const st = moneyStatus(row.money);
+    if (st.kind === "pending") return <span className="num" style={{ fontWeight: 700, color: "var(--bad)" }}>{rupees(st.amount)}</span>;
+    if (st.kind === "track") return <span style={{ color: "var(--mut)" }}>{tx(ST.onTrack)}</span>;
+    return <span style={{ fontWeight: 600, color: "var(--ok)" }}>{tx(ST.paidUp)}</span>;
+  };
+
+  /** Compact and By class (UI-94): one line a child, about twice as many on a screen, same swipe. */
+  const mLine = (row: StudentListRow, i: number, inClass: boolean) => {
+    // The name gets the room: a compact line names the class (short), By class (whose heading is the class) the SR no.
+    const meta = inClass ? (row.sr ? `SR ${row.sr}` : "") : classChipLabel(row.classLabel);
+    return (
+      <div key={row.id} className="hs stu-swipe stu-cline" style={{ animationDelay: `${Math.min(i * 8, 56)}ms` }}>
+        <IntentLink feedback href={studentProfileHref(row.id, returnTo)} data-row-link="" aria-label={row.name} className="tap stu-crow">
+          <span className="clip" style={{ flex: 1, minWidth: 0, fontSize: 14.5, fontWeight: 600 }}>{row.name}</span>
+          {meta ? <span className="num clip stu-cmeta">{meta}</span> : null}
+          <span className="stu-cmoney">{moneyShort(row)}</span>
+        </IntentLink>
+        {actions(row, false)}
+      </div>
+    );
+  };
+
+  const selectedRows = props.rows.filter((row) => picked.has(row.id));
+  // Review S03: no row of scrolling quick pills. Filters are chosen in one grouped sheet;
+  // what is on shows here as removable chips — the plain-language summary of the list.
+  const enrollmentChip = fees && props.enrollment && props.enrollment !== "active" ? (
+    <Link href={withEnrollment(hrefFor({ page: 1 }), "active")} className="tap chip on" aria-label={tx(ST.removeFilter(tx(ENROLLMENT_WORD[props.enrollment])))}>
+      {tx(ENROLLMENT_WORD[props.enrollment])}
+      <Ic n="x" size={14} />
+    </Link>
+  ) : null;
+  const classChip =
+    props.classId && props.classLabel ? (
+      <Link href={hrefFor({ classId: null })} className="tap chip on" aria-label={tx(ST.clearClass(props.classLabel))}>
+        {props.classLabel}
+        <Ic n="x" size={14} />
+      </Link>
+    ) : null;
+  // Every filter that is on, each with its own ×.
+  const filterChips = filters.map((f) => (
+    <Link key={f} href={hrefFor({ segs: filters.filter((x) => x !== f) })} className="tap chip on" aria-label={tx(ST.removeFilter(tx(FILTER_WORD[f])))}>
+      {tx(FILTER_WORD[f])}
+      <Ic n="x" size={14} />
+    </Link>
+  ));
+  // The phone's way to see and drop the missing-details filter; the desk shows its select instead.
+  const missingChip = missingLabel ? (
+    <button type="button" className="tap chip on" aria-label={tx(ST.removeFilter(tx(missingLabel)))} onClick={() => pickMissing("")}>
+      {tx(missingLabel)}
+      <Ic n="x" size={14} />
+    </button>
+  ) : null;
+  const activeCount = (props.classId ? 1 : 0) + filters.length + (missing ? 1 : 0) + (enrollmentChip ? 1 : 0);
+  // Asking teachers is offered where it applies: for a filter's matches here, for picked rows in the bulk bar.
+  const askBanner = props.taskAssignment && missingLabel ? (
+    <div className="stu-ask">
+      <Banner tone="info" action={<AssignmentLauncher language={language} variant="pri" selectedIds={props.taskAssignment.matchingIds} initialMissing={missing} />}>
+        {tx(missingLabel)} · <span className="num">{props.taskAssignment.matchingIds.length}</span> {tx(T.students)}
+      </Banner>
+    </div>
+  ) : null;
+  const hidden = (
+    <>
+      {props.taskAssignment?.missing ? <input type="hidden" name="missing" value={props.taskAssignment.missing}/> : null}
+      {props.enrollment?<input type="hidden" name="status" value={props.enrollment}/>:null}
+      {props.classId ? <input type="hidden" name="class" value={props.classId} /> : null}
+      {viewParam ? <input type="hidden" name="view" value={viewParam} /> : null}
+      {filters.length ? <input type="hidden" name="seg" value={filters.join(",")} /> : null}
+      {lookParam ? <input type="hidden" name="look" value={lookParam} /> : null}
+      {serverSort ? <input type="hidden" name="sort" value={serverSort.key} /> : null}
+    </>
+  );
+  const noRows = (
+    <div className="stu-empty">
+      {filtered ? tx(ST.noMatchDesign) : tx(T.noStudents)}
+      {filtered ? (
+        <div style={{ marginTop: 12 }}>
+          <Btn href={studentsHref({ view: viewParam, look: lookParam })}>{tx(T.clear)}</Btn>
+        </div>
+      ) : null}
+    </div>
+  );
+  const pager =
+    props.window.pages > 1 ? (
+      <nav aria-label={tx(T.students)} className="stu-pager">
+        {props.window.page > 1 ? (
+          <Btn icon="chevLeft" href={hrefFor({ page: props.window.page - 1 })}>{tx(T.previous)}</Btn>
+        ) : null}
+        <span className="num" style={{ fontSize: 13, color: "var(--mut)" }}>{tx(T.rangeOf(props.window.firstRow, props.window.lastRow, props.total))}</span>
+        {props.window.page < props.window.pages ? (
+          <Btn href={hrefFor({ page: props.window.page + 1 })}>
+            {tx(T.next)} <Ic n="chevRight" size={18} />
+          </Btn>
+        ) : null}
+      </nav>
+    ) : null;
+  const viewSwitch = props.seesMoney ? (
+    <Seg<StudentView>
+      label={tx(ST.views)}
+      value={props.view}
+      onChange={pickView}
+      options={[
+        { value: "fees", label: tx(ST.viewFees) },
+        { value: "school", label: tx(ST.viewSchool) },
+      ]}
+      style={{ width: 180 }}
+    />
+  ) : null;
+
+  return (
+    <StudentSearchProvider query={props.q} href={hrefFor({ q: undefined }, sort)}>
+      <div className="only-d" style={{ display: "contents" }}>
+        <TopBar
+          crumb={tx(T.studentsCrumb(props.session))}
+          title={tx(T.students)}
+          actions={
+            <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <SearchTrigger />
+              {props.quick?.length ? <NewMenu keys={props.quick} /> : null}
+            </span>
+          }
+        />
+      </div>
+      <div className="vx-pmain stu" data-student-source-directory={props.sourceData?"true":undefined}>
+        {/* Phone: the design's own header, not a top bar (F05). */}
+        <header className="only-m glass stu-mhead">
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+            <h1 className="serif" style={{ margin: 0, fontSize: 30, fontWeight: 600 }}>{tx(T.students)}</h1>
+            <StudentSearchStatus className="num" style={{ fontSize: 13, color: "var(--mut)" }}>{props.total > rows.length ? tx(ST.showingOf(rows.length, props.total)) : tx(ST.showing(rows.length))}</StudentSearchStatus>
+          </div>
+          <div className="stu-mfind">
+            <StudentSearchForm className="stu-msearch">
+              <Ic n="search" />
+              <label className="sr" htmlFor="stu-q-m">{tx(ST.searchLabel)}</label>
+              <StudentSearchInput id="stu-q-m" placeholder={tx(ST.searchPhone)} enterKeyHint="search" />
+              {hidden}
+            </StudentSearchForm>
+            {/* Class, fee filters, order and layout in one sheet (UI-94). */}
+            <button type="button" className="tap stu-fbtn" data-on={activeCount ? "" : undefined} aria-label={activeCount ? tx(ST.filterOn(activeCount)) : tx(ST.filter)} aria-haspopup="dialog" onClick={() => setSheetOpen(true)}>
+              <Ic n="sliders" />
+              {activeCount ? <span className="num stu-fcount">{activeCount}</span> : null}
+            </button>
+          </div>
+          {classChip || filterChips.length || missingChip || enrollmentChip ? (
+            <div className="stu-mchips stu-on" role="group" aria-label={tx(ST.filtersOn)}>
+              {enrollmentChip}
+              {classChip}
+              {missingChip}
+              {filterChips}
+            </div>
+          ) : null}
+        </header>
+
+        <div className="stu-wrap">
+          <div className="only-d stu-tools">
+            <StudentSearchForm className="stu-dsearch">
+              <Ic n="search" />
+              <label className="sr" htmlFor="stu-q-d">{tx(ST.searchLabel)}</label>
+              <StudentSearchInput id="stu-q-d" placeholder={tx(ST.search)} />
+              {hidden}
+            </StudentSearchForm>
+            <button type="button" className="tap btn sec stu-dfbtn" data-on={activeCount ? "" : undefined} aria-haspopup="dialog" onClick={() => setSheetOpen(true)}>
+              <Ic n="sliders" size={18} />
+              {tx(ST.filters)}
+              {activeCount ? <span className="num stu-fcount">{activeCount}</span> : null}
+            </button>
+            <div className="stu-on" role="group" aria-label={tx(ST.filtersOn)} style={{ display: "flex", flexWrap: "wrap", gap: 6, flex: 1, minWidth: 0 }}>
+              {enrollmentChip}
+              {classChip}
+              {filterChips}
+            </div>
+            {props.taskAssignment ? (
+              <Select aria-label={tx(ms.taskMissing)} title={tx(ms.taskMissing)} value={missing} onChange={(e) => pickMissing(e.target.value)} style={{ width: "auto", maxWidth: 150, height: 40, fontSize: 14, paddingRight: 30, flex: "none" }}>
+                <option value="">{tx(ms.taskMissingAny)}</option>
+                {missingOptions.map((o) => <option key={o.value} value={o.value}>{tx(o.label)}</option>)}
+              </Select>
+            ) : null}
+            <Btn icon="download" onClick={() => exportRows(rows)} disabled={rows.length === 0}>{tx(T.export)}</Btn>
+            {props.canAdmit ? <Btn variant="pri" icon="userPlus" href="/admissions/new">{tx(T.addStudent)}</Btn> : null}
+          </div>
+
+          {props.feesDirectoryHref ? <Banner>{tx(ST.sourceFeesHint)}{" "}<a href={props.feesDirectoryHref} style={{ textDecoration: "underline" }}>{tx(ST.sourceFeesLink)}</a></Banner> : null}
+          {props.failed ? <p role="alert" data-student-source-unavailable="true" style={{ margin: 0, fontSize: 13, color: "var(--warnfg)" }}>{tx(T.couldNotRead)}</p> : null}
+
+          {askBanner}
+
+          {/* Row clicks are delegated here; the keyboard path is each row's name link. */}
+          <div className="only-d card stu-card" onClick={onListClick}>
+            <div className="stu-scroll">
+              <div role="table" aria-label={tx(T.students)} style={{ minWidth: 780 }}>
+                <div role="row" className="stu-head" style={{ gridTemplateColumns: tracks }}>
+                  <span role="columnheader" style={{ display: "flex", justifyContent: "center" }}>
+                    <Tick on={allOn} some={someOn} label={tx(T.selectAll)} onToggle={() => setPicked(allOn ? new Set() : new Set(rows.map((row) => row.id)))} />
+                  </span>
+                  {cols.map(headCell)}
+                </div>
+                {rows.length === 0
+                  ? noRows
+                  : rows.map((row, i) => (
+                      <div key={row.id} role="row" className={`stu-row${picked.has(row.id) ? " sel" : ""}`} style={{ gridTemplateColumns: tracks, borderTop: i === 0 ? 0 : undefined, animationDelay: `${Math.min(i * 8, 56)}ms` }}>
+                        <span role="cell" style={{ display: "flex", justifyContent: "center" }}>
+                          <Tick on={picked.has(row.id)} label={tx(T.selectRow(row.name))} onToggle={() => toggle(row.id)} />
+                        </span>
+                        {nameCell(row, i)}
+                        <span role="cell" className="stu-td">{row.classLabel}{row.rollNo ? ` · ${tx(T.colRoll)} ${row.rollNo}` : ""}</span>
+                        {fees && row.money ? (
+                          <>
+                            <span role="cell" className="stu-td" style={{ color: row.route ? "var(--fg)" : "var(--sub)" }}>{row.route ?? "—"}</span>
+                            <span role="cell" className="stu-td num" style={{ fontSize: 14, fontWeight: 700, textAlign: "right", color: row.money.pendingToday > 0 ? "var(--bad)" : "var(--sub)" }}>
+                              {row.money.pendingToday > 0 ? rupees(row.money.pendingToday) : "—"}
+                            </span>
+                            <span role="cell" className="stu-td num" style={{ textAlign: "right", color: "var(--mut)" }}>{row.money.notDueYet > 0 ? rupees(row.money.notDueYet) : "—"}</span>
+                            <span role="cell" style={{ padding: "0 8px 0 16px", display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ flex: 1, height: 6, borderRadius: 3, background: "var(--s3)", overflow: "hidden", display: "block" }}>
+                                <span className="stu-bar" style={{ width: `${row.money.percent}%`, background: row.money.percent >= 100 ? "var(--ok)" : row.money.pendingToday > 0 ? "var(--warn)" : "var(--acc)", animationDelay: `${Math.min(i * 8, 56)}ms` }} />
+                              </span>
+                              <span className="num" style={{ width: 36, fontSize: 12, fontWeight: 700, textAlign: "right" }}>{row.money.percent}%</span>
+                            </span>
+                          </>
+                        ) : fees ? (
+                          <>
+                            <span role="cell" className="stu-td" style={{ color: "var(--sub)" }}>{row.route ?? "—"}</span>
+                            <span role="cell" className="stu-td" style={{ textAlign: "right", color: "var(--sub)" }}>—</span>
+                            <span role="cell" className="stu-td" style={{ textAlign: "right", color: "var(--sub)" }}>—</span>
+                            <span role="cell" className="stu-td" style={{ color: "var(--sub)" }}>—</span>
+                          </>
+                        ) : (
+                          <>
+                            <span role="cell" className="stu-td">{attendanceCell(row)}</span>
+                            <span role="cell" className="stu-td">{badgesFor(row)}</span>
+                          </>
+                        )}
+                        {actions(row, true)}
+                      </div>
+                    ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Phone: cards that swipe left for Call · WhatsApp · Collect (F05). */}
+          <div className="only-m stu-cards" onClick={onListClick} data-look={layout}>
+            {moneySortIdle ? <p className="stu-fnote" style={{ margin: 0 }}>{tx(ST.sortPendingNote)}</p> : null}
+            {rows.length === 0
+              ? <div className="card">{noRows}</div>
+              : layout === "compact"
+                ? <div className="card stu-clist">{rows.map((row, i) => mLine(row, i, false))}</div>
+                : layout === "class"
+                  ? groupByClass(rows).map((group, g, all) => (
+                      <section key={`${group.label}-${g}`} className="stu-group" aria-label={group.label}>
+                        <header className="stu-ghead">
+                          <span className="serif" style={{ fontSize: 18, fontWeight: 600 }}>{group.label}</span>
+                          <span className="num" style={{ fontSize: 12.5, color: "var(--mut)" }}>
+                            {tx(ST.groupCount(group.rows.length))}
+                            {/* A total only for a class wholly on this page: the first group may have begun a page back, the last may go on. */}
+                            {group.pending !== null && (g > 0 || props.window.page === 1) && (g < all.length - 1 || props.window.page >= props.window.pages) ? ` · ${tx(ST.groupPending(rupees(group.pending)))}` : ""}
+                            {g === all.length - 1 && props.window.page < props.window.pages ? ` · ${tx(ST.groupNextPage)}` : ""}
+                          </span>
+                        </header>
+                        <div className="card stu-clist">{group.rows.map((row, i) => mLine(row, i, true))}</div>
+                      </section>
+                    ))
+                  : rows.map((row, i) => mCard(row, i))}
+            {rows.length > 0 && (props.canCollect || rows.some((r) => mobileOf(r.phone))) ? (
+              <p style={{ margin: "6px 0 0", textAlign: "center", fontSize: 12, color: "var(--sub)" }}>{tx(props.canCollect ? ST.swipeHint : ST.swipeHintNoCollect)}</p>
+            ) : null}
+            {/* The phone has no ticks (F05); the list's export stays reachable under it. */}
+            {rows.length > 0 ? (
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <Btn variant="ghost" icon="download" onClick={() => exportRows(rows)}>{tx(ST.exportList(rows.length))}</Btn>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="stu-foot">
+            {rows.length > 0 ? <StudentSearchStatus className="only-d" style={{ fontSize: 12, color: "var(--sub)" }}>{tx(ST.footer(props.window.firstRow, props.window.lastRow, props.total))}</StudentSearchStatus> : <span />}
+            {pager}
+            {/* On a phone the view is chosen in the Filter sheet. */}
+            {viewSwitch ? <span className="only-d">{viewSwitch}</span> : null}
+          </div>
+          <p className="only-d" style={{ margin: 0, fontSize: 12, color: "var(--sub)" }}>{tx(T.sourceNote)}</p>
+        </div>
+      </div>
+
+      <StudentFilterSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        current={{ classId: props.classId, filters, sort, layout, view: props.view, missing, ...(props.enrollment ? { enrollment: props.enrollment } : {}) }}
+        missingOptions={missingOptions}
+        missingTitle={ms.taskMissingTitle}
+        classes={props.classes}
+        counts={props.counts}
+        seesMoney={props.seesMoney}
+        onApply={applyChoice}
+      />
+
+      {selectedRows.length > 0 ? (
+        <div className="only-d stu-bulkwrap">
+          <div role="toolbar" aria-label={tx(T.selected(selectedRows.length))} className="stu-bulk">
+            <span className="num" style={{ fontSize: 14, fontWeight: 700, marginRight: 10, whiteSpace: "nowrap" }}>{tx(T.selected(selectedRows.length))}</span>
+            {props.canRemind ? (
+              <Link href={`/reminders?students=${selectedRows.map((row) => row.id).join(",")}`} className="tap btn" style={{ height: 36, background: "var(--tacs)", color: "var(--tacc)" }}>
+                <Ic n="message" /> {tx(T.sendReminder)}
+              </Link>
+            ) : null}
+            {props.taskAssignment ? (
+              <button type="button" className="tap btn" style={{ height: 36, background: "transparent", color: "var(--tfg)" }} onClick={() => askPicked.current?.show()}>
+                <Ic n="users" /> {tx(ms.taskAssign)}
+              </button>
+            ) : null}
+            <button type="button" className="tap btn" style={{ height: 36, background: "transparent", color: "var(--tfg)" }} onClick={() => exportRows(selectedRows)}>
+              <Ic n="download" /> {tx(T.export)}
+            </button>
+            <button type="button" className="tap btn" aria-label={tx(T.clearSelection)} style={{ height: 36, width: 36, padding: 0, background: "transparent", color: "var(--tfg)" }} onClick={() => setPicked(new Set())}>
+              <Ic n="x" />
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {/* Outside the bulk bar, so clearing the selection cannot close an open sheet. */}
+      {props.taskAssignment ? <AssignmentLauncher ref={askPicked} trigger={null} language={language} selectedIds={selectedRows.map((row) => row.id)} initialMissing={missing} /> : null}
+    </StudentSearchProvider>
+  );
+}

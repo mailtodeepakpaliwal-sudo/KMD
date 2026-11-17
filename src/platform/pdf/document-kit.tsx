@@ -1,0 +1,537 @@
+import "server-only";
+
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import * as React from "react";
+import { Font, Image, StyleSheet, Text, View } from "@react-pdf/renderer";
+
+import { schoolProfile } from "@/platform/config/school";
+
+/**
+ * What every generated PDF shares: fonts, money and date formatting, the
+ * letterhead, and the two binary assets (logo, signature) that react-pdf needs
+ * handed to it rather than pointed at.
+ *
+ * Extracted from lib/students/fee-statement-pdf.tsx when the receipt PDF was
+ * written, so the two documents cannot drift on the things a reader compares
+ * across them — the school's name block, the way an amount is spelled, and
+ * which font carries Devanagari.
+ */
+
+// Devanagari for the Hindi half of every bilingual label. Helvetica (English +
+// amounts; an embedded face since D-640, see below) has no Devanagari glyphs,
+// and this Noto face has no Latin letters, so each <Text> picks its family by
+// script. The TTFs ship in public/fonts and are traced into every PDF route via
+// `outputFileTracingIncludes` in next.config.ts — miss that and the route works
+// locally and 500s on Vercel.
+export const HI_FONT = "NotoDevanagari";
+
+type EmbeddedFace = { file: string; fontWeight?: "bold"; fontStyle?: "italic" };
+
+const fourFaces = (prefix: string): EmbeddedFace[] => [
+  { file: `${prefix}-Regular.ttf` },
+  { file: `${prefix}-Bold.ttf`, fontWeight: "bold" },
+  { file: `${prefix}-Italic.ttf`, fontStyle: "italic" },
+  { file: `${prefix}-BoldItalic.ttf`, fontWeight: "bold", fontStyle: "italic" },
+];
+
+/**
+ * Every family name a document may ask for that react-pdf would otherwise
+ * leave to the viewer (D-640).
+ *
+ * Helvetica, Times and Courier are the PDF "standard 14" fonts: react-pdf
+ * writes their NAMES into the file and nothing else, trusting the phone to
+ * draw them. The owner's Android phone opened every WhatsApp report card and
+ * receipt as a blank white sheet the first time, and these were the only part
+ * of the file that came from somewhere other than the file. Each name now
+ * resolves to a face embedded from public/fonts — Liberation, renamed and
+ * subset by scripts/build-pdf-fonts.py, with the same letter widths and the
+ * line metrics react-pdf gave the standard fonts, so no line breaks or page
+ * count moves. `tests/pdf-fonts-embedded.test.ts` fails a document that names
+ * a font it does not carry.
+ */
+const EMBEDDED_STANDARD_FAMILIES: Record<string, EmbeddedFace[]> = {
+  Helvetica: fourFaces("VPPSPDFSans"),
+  "Helvetica-Bold": [{ file: "VPPSPDFSans-Bold.ttf" }],
+  "Helvetica-Oblique": [{ file: "VPPSPDFSans-Italic.ttf" }],
+  "Helvetica-BoldOblique": [{ file: "VPPSPDFSans-BoldItalic.ttf" }],
+  "Times-Roman": fourFaces("VPPSPDFSerif"),
+  "Times-Bold": [{ file: "VPPSPDFSerif-Bold.ttf" }],
+  "Times-Italic": [{ file: "VPPSPDFSerif-Italic.ttf" }],
+  "Times-BoldItalic": [{ file: "VPPSPDFSerif-BoldItalic.ttf" }],
+  Courier: fourFaces("VPPSPDFMono"),
+  "Courier-Bold": [{ file: "VPPSPDFMono-Bold.ttf" }],
+  "Courier-Oblique": [{ file: "VPPSPDFMono-Italic.ttf" }],
+  "Courier-BoldOblique": [{ file: "VPPSPDFMono-BoldItalic.ttf" }],
+};
+
+let fontRegistered = false;
+export function ensurePdfFontsRegistered(): void {
+  if (fontRegistered) return;
+  const fontsDir = path.join(process.cwd(), "public/fonts");
+  Font.register({
+    family: HI_FONT,
+    fonts: [
+      { src: path.join(fontsDir, "NotoSansDevanagari-Regular.ttf") },
+      { src: path.join(fontsDir, "NotoSansDevanagari-Bold.ttf"), fontWeight: "bold" },
+    ],
+  });
+  // Font.register() only ADDS faces, and a family resolves to its first exact
+  // match, so registering "Helvetica" again would leave the built-in face in
+  // front. Drop the built-in family first, then register the embedded one
+  // under the same name: every existing style keeps working unchanged.
+  const families = Font.getRegisteredFonts() as Record<string, unknown>;
+  for (const [family, faces] of Object.entries(EMBEDDED_STANDARD_FAMILIES)) {
+    delete families[family];
+    Font.register({
+      family,
+      fonts: faces.map(({ file, fontWeight, fontStyle }) => ({
+        src: path.join(fontsDir, file),
+        fontWeight,
+        fontStyle,
+      })),
+    });
+  }
+  fontRegistered = true;
+}
+
+/**
+ * The digits of a rupee figure, grouped Indian-style.
+ *
+ * The ONE place a PDF rounds money and the one place it groups it, so the two
+ * spellings below cannot drift — and so the repo has exactly one rounding
+ * policy for PDF money rather than a second copy per symbol. `Math.round`
+ * rather than `trunc` matches `platform/helpers/currency.ts`, which is what the
+ * screen uses.
+ */
+function groupedRupees(value: number): string {
+  return Math.round(value || 0).toLocaleString("en-IN"); // @allow-raw-money-format: this IS the PDF money formatter; react-pdf renders no DOM, so formatInr() cannot be used here.
+}
+
+/**
+ * react-pdf's Helvetica has no ₹ glyph, so amounts read "Rs. 12,000".
+ *
+ * Kept for callers that must stay in Helvetica — the teacher collection list
+ * sets whole sentences in it — but it is no longer what a parent-facing
+ * document should use. See {@link inr}.
+ */
+export function rs(value: number): string {
+  return `Rs. ${groupedRupees(value)}`; // @allow-raw-money-format: Helvetica has no rupee glyph, so a Helvetica document spells it out.
+}
+
+/**
+ * An amount with a real ₹, exactly as the screen writes it.
+ *
+ * The divergence `rs()` documents turned out to be avoidable. Noto Sans
+ * Devanagari — already registered here for the Hindi half of every label —
+ * carries U+20B9 along with the digits, comma and full stop, verified against
+ * the shipped TTF. So a money string set in {@link MONEY_FONT} renders "₹4,500"
+ * rather than "Rs. 4,500", and the PDF a parent is sent stops disagreeing with
+ * the receipt the office is looking at.
+ *
+ * **Digits, separators and ₹ only.** That font has no Latin letters, so a
+ * string like `Rs. 4,500` or `₹4,500 due` set in it renders the letters as
+ * blanks. Put any words in a sibling <Text> in Helvetica.
+ */
+export function inr(value: number): string {
+  return `₹${groupedRupees(value)}`; // @allow-raw-money-format: the glyph is the point — see the note above on MONEY_FONT.
+}
+
+/** The family a {@link inr} string must be set in. Never put words in it. */
+export const MONEY_FONT = HI_FONT;
+
+export function formatPdfDate(value: string | null | undefined): string {
+  if (!value) return "-";
+  const date = new Date(value.length <= 10 ? `${value}T00:00:00` : value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+export type PdfImage = { data: Buffer; format: "png" };
+
+let logoCache: PdfImage | null = null;
+
+/**
+ * The school mark, read into a Buffer rather than passed as a path.
+ *
+ * Two reasons it is not `<Image src={path.join(process.cwd(), …)} />`: Vercel's
+ * file tracer cannot see a computed path argument, and the 192px PNG is 16 KB
+ * against the letterhead JPEG's 230 KB — which would have been the largest part
+ * of every receipt.
+ */
+export async function loadLogoImage(): Promise<PdfImage | null> {
+  if (logoCache) return logoCache;
+  try {
+    const data = await fs.readFile(path.join(process.cwd(), "public/branding/icon-192.png"));
+    logoCache = { data, format: "png" };
+    return logoCache;
+  } catch {
+    // A missing logo must never fail a receipt. The letterhead falls back to
+    // the school's name alone, which is what the document is actually for.
+    return null;
+  }
+}
+
+let signatureCache: PdfImage | null = null;
+
+/**
+ * The principal's signature, as it is signed on paper.
+ *
+ * A ruled empty box on a document that is emailed and WhatsApped is a box
+ * nobody ever signs — the parent receives an unsigned receipt and the office
+ * never sees it again to fix that. The scan is transparent PNG so it sits on
+ * the rule rather than in a white patch over it.
+ *
+ * Read into a Buffer for the same two reasons as the logo: Vercel's file tracer
+ * cannot follow a computed path passed to `<Image src>`, and one decode per
+ * process beats one per document.
+ *
+ * A missing file must never fail a receipt: the block falls back to the empty
+ * rule, which is what every document did before this existed.
+ */
+export async function loadSignatureImage(): Promise<PdfImage | null> {
+  if (signatureCache) return signatureCache;
+  try {
+    const data = await fs.readFile(
+      path.join(process.cwd(), "public/branding/authorised-signature.png"),
+    );
+    signatureCache = { data, format: "png" };
+    return signatureCache;
+  } catch {
+    return null;
+  }
+}
+
+let emblemCache: PdfImage | null = null;
+
+/**
+ * The school's crest — the rider over the open book — as the official
+ * letterhead carries it. Certificates set it at the head of the page and, very
+ * faint, behind the wording. Read into a Buffer for the same reasons as the
+ * logo; a missing file leaves the letterhead to the school's name.
+ */
+export async function loadEmblemImage(): Promise<PdfImage | null> {
+  if (emblemCache) return emblemCache;
+  try {
+    const data = await fs.readFile(path.join(process.cwd(), "public/branding/school-emblem.png"));
+    emblemCache = { data, format: "png" };
+    return emblemCache;
+  } catch {
+    return null;
+  }
+}
+
+let sealCache: PdfImage | null = null;
+
+/**
+ * The school's round seal, inked as a rubber stamp is (D-541): the school's
+ * name around the rim, "Jaipur (Raj.)" below, the crest in the middle, in
+ * stamp-pad violet and a little uneven at the edges. Printed only on a certificate that a
+ * person allowed to sign for the school prepared or approved; a missing file
+ * prints no seal rather than failing the document.
+ */
+export async function loadSealImage(): Promise<PdfImage | null> {
+  if (sealCache) return sealCache;
+  try {
+    const data = await fs.readFile(path.join(process.cwd(), "public/branding/school-seal.png"));
+    sealCache = { data, format: "png" };
+    return sealCache;
+  } catch {
+    return null;
+  }
+}
+
+export const pdfTokens = {
+  ink: "#1f2937",
+  inkStrong: "#111827",
+  muted: "#6b7280",
+  rule: "#e5e7eb",
+  ruleSoft: "#eceff3",
+  success: "#2f7f56",
+  successBg: "#f0f8f3",
+  danger: "#b42318",
+  dangerBg: "#fef3f2",
+  panel: "#f3f4f6",
+  /** `--accent`, hsl(20 86% 41%). The one saffron on a fee document. */
+  accent: "#c2490f",
+  /** `--warning-soft-foreground`, for a balance that is still owed. */
+  warning: "#92500e",
+  /** The warm off-white the app calls receipt paper (`.receipt-paper`). */
+  paper: "#fffdf7",
+  /** The parent stub's slightly deeper paper. */
+  stub: "#faf6ea",
+} as const;
+
+export const sharedStyles = StyleSheet.create({
+  page: { padding: 28, fontSize: 9, color: pdfTokens.ink, fontFamily: "Helvetica" },
+  schoolName: { fontSize: 15, fontFamily: "Helvetica-Bold", color: pdfTokens.inkStrong },
+  schoolMeta: { fontSize: 8, color: pdfTokens.muted, marginTop: 2 },
+  schoolMetaHi: { fontSize: 8, color: pdfTokens.muted, marginTop: 1, fontFamily: HI_FONT },
+  docTitle: { fontSize: 11, fontFamily: "Helvetica-Bold", marginTop: 10, color: pdfTokens.inkStrong },
+  docTitleHi: { fontSize: 9, fontFamily: HI_FONT, color: pdfTokens.muted },
+  rule: { borderBottomWidth: 1, borderBottomColor: pdfTokens.rule, marginVertical: 8 },
+  row: { flexDirection: "row" },
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: pdfTokens.panel,
+    paddingVertical: 3,
+    paddingHorizontal: 4,
+    fontSize: 8.5,
+  },
+  tableRow: {
+    flexDirection: "row",
+    paddingVertical: 3,
+    paddingHorizontal: 4,
+    borderBottomWidth: 0.5,
+    borderBottomColor: pdfTokens.ruleSoft,
+  },
+  th: { flex: 1 },
+  thRight: { flex: 1, textAlign: "right" },
+  thEn: { fontFamily: "Helvetica-Bold" },
+  thEnRight: { fontFamily: "Helvetica-Bold", textAlign: "right" },
+  thHi: { fontFamily: HI_FONT, fontSize: 7, color: pdfTokens.muted },
+  thHiRight: { fontFamily: HI_FONT, fontSize: 7, color: pdfTokens.muted, textAlign: "right" },
+  muted: { color: pdfTokens.muted },
+  footer: {
+    position: "absolute",
+    bottom: 16,
+    left: 28,
+    right: 28,
+    fontSize: 7.5,
+    color: pdfTokens.muted,
+    textAlign: "center",
+  },
+  logo: { width: 42, height: 42 },
+});
+
+/** Bilingual column heading, English over Hindi. */
+export function Th({
+  label,
+  right = false,
+}: {
+  label: { en: string; hi: string };
+  right?: boolean;
+}) {
+  return (
+    <View style={right ? sharedStyles.thRight : sharedStyles.th}>
+      <Text style={right ? sharedStyles.thEnRight : sharedStyles.thEn}>{label.en}</Text>
+      <Text style={right ? sharedStyles.thHiRight : sharedStyles.thHi}>{label.hi}</Text>
+    </View>
+  );
+}
+
+/** A bordered badge. react-pdf has no `transform`, so a stamp reads as a box. */
+export function Badge({
+  children,
+  tone = "neutral",
+}: {
+  children: string;
+  tone?: "success" | "danger" | "neutral";
+}) {
+  const color =
+    tone === "success" ? pdfTokens.success : tone === "danger" ? pdfTokens.danger : pdfTokens.muted;
+  return (
+    <Text
+      style={{
+        alignSelf: "flex-start",
+        borderWidth: 1.5,
+        borderColor: color,
+        borderStyle: "solid",
+        borderRadius: 3,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        fontSize: 8,
+        fontFamily: "Helvetica-Bold",
+        color,
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
+
+/** The school's name block, identical across every document it heads. */
+export function SchoolLetterhead({
+  docTitleEn,
+  docTitleHi,
+  logo,
+  centered = false,
+}: {
+  docTitleEn: string;
+  docTitleHi: string;
+  logo?: PdfImage | null;
+  centered?: boolean;
+}) {
+  const meta = [schoolProfile.address, schoolProfile.phone, schoolProfile.email]
+    .map((value) => value?.trim())
+    .filter(Boolean)
+    .join("  ·  ");
+
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: centered ? "center" : "flex-start",
+        gap: 10,
+      }}
+    >
+      {logo ? <Image src={logo} style={sharedStyles.logo} /> : null}
+      <View style={centered ? { alignItems: "center" } : undefined}>
+        <Text style={sharedStyles.schoolName}>{schoolProfile.name}</Text>
+        {meta ? <Text style={sharedStyles.schoolMeta}>{meta}</Text> : null}
+        <Text style={sharedStyles.docTitle}>{docTitleEn}</Text>
+        <Text style={sharedStyles.docTitleHi}>{docTitleHi}</Text>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * The letterhead the SCREEN draws: mark, name and contact line stacked and
+ * centred, then the document's own title in a ruled box, over a heavy rule.
+ *
+ * `SchoolLetterhead` above puts the title beside the mark, which is a report
+ * header — right for an internal export, wrong for the thing a parent is
+ * handed. This one is `receipt-document-v3.tsx`'s `<header>`, so the PDF and
+ * the page a staff member is looking at are recognisably the same document.
+ */
+export function ParentDocumentLetterhead({
+  docTitleEn,
+  docTitleHi,
+  logo,
+}: {
+  docTitleEn: string;
+  docTitleHi: string;
+  logo?: PdfImage | null;
+}) {
+  // The parent's copy carries the same contact line as the receipt on screen.
+  const meta = [schoolProfile.letterhead.address, schoolProfile.letterhead.phone, schoolProfile.letterhead.email]
+    .map((value) => value?.trim())
+    .filter(Boolean)
+    .join("  ·  ");
+
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        borderBottomWidth: 1.5,
+        borderBottomColor: pdfTokens.inkStrong,
+        paddingBottom: 6,
+      }}
+    >
+      {logo ? <Image src={logo} style={{ width: 30, height: 30, marginBottom: 3 }} /> : null}
+      <Text style={{ fontSize: 14, fontFamily: "Helvetica-Bold", color: pdfTokens.inkStrong, textAlign: "center" }}>
+        {schoolProfile.name}
+      </Text>
+      {meta ? (
+        <Text style={{ fontSize: 7.5, color: pdfTokens.muted, marginTop: 3, textAlign: "center" }}>
+          {meta}
+        </Text>
+      ) : null}
+      <View
+        style={{
+          marginTop: 5,
+          borderWidth: 0.8,
+          borderColor: pdfTokens.inkStrong,
+          paddingHorizontal: 10,
+          paddingTop: 3,
+          paddingBottom: 2,
+          alignItems: "center",
+        }}
+      >
+        <Text style={{ fontSize: 8, fontFamily: "Helvetica-Bold", letterSpacing: 1.4 }}>
+          {docTitleEn}
+        </Text>
+        <Text style={{ fontSize: 7.5, fontFamily: HI_FONT, color: pdfTokens.muted, marginTop: 1 }}>
+          {docTitleHi}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * The signed-off corner of a parent document.
+ *
+ * Left: what the document is. Right: the actual signature over its rule. The
+ * caption stays under the rule where it has always been, so a printed copy
+ * still reads correctly if the image ever fails to load.
+ */
+export function SignatureBlock({
+  signature,
+  statementEn,
+  statementHi,
+  captionEn = "AUTHORISED SIGNATURE",
+  captionHi = "अधिकृत हस्ताक्षर",
+  lead,
+  tight = false,
+}: {
+  signature?: PdfImage | null;
+  statementEn?: string;
+  statementHi?: string;
+  captionEn?: string;
+  captionHi?: string;
+  /** Above the statement, e.g. the receipt's PAID stamp, so it costs no row of its own. */
+  lead?: React.ReactNode;
+  /** Less space above the rule, for a document that must end on page one. */
+  tight?: boolean;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "flex-end",
+        justifyContent: "space-between",
+        marginTop: tight ? 8 : 16,
+        paddingTop: tight ? 6 : 10,
+        borderTopWidth: 0.5,
+        borderTopColor: pdfTokens.rule,
+        gap: 16,
+      }}
+    >
+      <View style={{ flex: 1 }}>
+        {lead}
+        {statementEn ? (
+          <Text style={{ fontSize: 7.5, color: pdfTokens.muted }}>{statementEn}</Text>
+        ) : null}
+        {statementHi ? (
+          <Text style={{ fontSize: 7.5, color: pdfTokens.muted, fontFamily: HI_FONT, marginTop: 1 }}>
+            {statementHi}
+          </Text>
+        ) : null}
+      </View>
+      <View style={{ width: 168, alignItems: "center" }}>
+        {signature ? (
+          // Sits ON the rule, not above a gap: the rule is this View's bottom
+          // border and the image has a transparent ground, so the ink crosses
+          // it the way a pen does.
+          <Image src={signature} style={{ width: 132, height: 40, marginBottom: -4 }} />
+        ) : (
+          <View style={{ height: 36 }} />
+        )}
+        <View
+          style={{
+            width: "100%",
+            borderTopWidth: 0.8,
+            borderTopColor: pdfTokens.ink,
+            paddingTop: 3,
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ fontSize: 7, fontFamily: "Helvetica-Bold", letterSpacing: 0.8, color: pdfTokens.muted }}>
+            {captionEn}
+          </Text>
+          <Text style={{ fontSize: 7, fontFamily: HI_FONT, color: pdfTokens.muted }}>
+            {captionHi}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}

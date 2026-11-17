@@ -1,0 +1,226 @@
+name: CI
+
+# Everything `npm run check` runs locally, run again on every PR — because the
+# merge is the agent's own (D-7), and CI being green is the only thing standing
+# between a branch and production.
+#
+# The gates run as four parallel jobs (types, lint, tests, build) and `check`
+# is a terminal job that needs all four. `check` is the only check the "main
+# needs green CI" ruleset requires, so its name and meaning are unchanged: it
+# is green only when every child succeeded, and red when any child failed, was
+# cancelled or was skipped.
+#
+# Caches:
+#   - npm download cache (setup-node, unchanged from before): setup-node may
+#     save it on any run, but GitHub scopes a PR's entry to that PR's ref, so
+#     main never restores it.
+#   - TypeScript .tsbuildinfo and ESLint --cache (content strategy), each
+#     keyed on OS, arch, exact Node version, the lockfile (which pins
+#     typescript, eslint and the React Compiler) and the config files that
+#     change their output. restore-keys never cross a lockfile or config
+#     change, so those always start cold. Restored on every run; saved only by
+#     pushes to main and by manual dispatches (both need write access), so no
+#     PR seeds these.
+#   - Not .next/cache: the build job compiles cold, with webpack's cache in
+#     memory, because writing it to disk cost the 8 GB runner about 1.5 GB
+#     at the end of the server compilation (D-638).
+# None of them stores credentials, sessions or data; none is a previous
+# commit's result: tsc and eslint still check every file of this commit and
+# only skip work whose inputs hash identically.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Placeholders. The build must not reach a database, and it does not need
+  # to: every page that reads one is dynamic. Real values would also mean a
+  # service-role key in CI, which is worth avoiding for a job that only
+  # compiles. They must not trip the placeholder guard in src/platform/env.ts.
+  NEXT_PUBLIC_SUPABASE_URL: https://ci-build-only.supabase.co
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_build_only
+  NEXT_PUBLIC_SCHOOL_NAME: Shri Veer Patta Senior Secondary School
+  NEXT_PUBLIC_SITE_URL: http://localhost:3000
+  VPPSONE_ENV: dev
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        id: node
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+
+      # One's equivalent of the fees app's dependency-scan gate (95dcd45d):
+      # what ships to the server, at high or worse. Dev-only tooling (eslint's
+      # minimatch, moderate) is accepted and recorded in DECISIONS.
+      - name: Dependency audit (production, high)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Restore TypeScript build info
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/tsc
+          key: tsc-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('tsconfig.json', 'next.config.ts') }}-${{ github.sha }}
+          restore-keys: |
+            tsc-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('tsconfig.json', 'next.config.ts') }}-
+
+      # Same command as `npm run typecheck`, plus an incremental build-info
+      # file. tsc re-checks every file whose content hash, or whose
+      # dependencies' declarations, changed; an unreadable file is ignored and
+      # the check runs cold.
+      - name: Typecheck
+        run: npm run typecheck -- --incremental --tsBuildInfoFile .cache/tsc/tsconfig.tsbuildinfo
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+
+      - name: Save TypeScript build info
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/tsc
+          key: tsc-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('tsconfig.json', 'next.config.ts') }}-${{ github.sha }}
+
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        id: node
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Restore ESLint cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/eslint
+          key: eslint-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('eslint.config.mjs', 'scripts/port-rewrite-imports.mjs', 'tsconfig.json') }}-${{ github.sha }}
+          restore-keys: |
+            eslint-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('eslint.config.mjs', 'scripts/port-rewrite-imports.mjs', 'tsconfig.json') }}-
+
+      # `--cache-strategy content`: a fresh checkout has new mtimes, so the
+      # cache must key on file contents. No rule in eslint.config.mjs is
+      # type-aware or cross-file, so a file's result depends only on its own
+      # contents and the config — which ESLint also hashes into the cache.
+      - name: Lint
+        run: npm run lint -- --cache --cache-strategy content --cache-location .cache/eslint/
+
+      - name: Save ESLint cache
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/eslint
+          key: eslint-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('eslint.config.mjs', 'scripts/port-rewrite-imports.mjs', 'tsconfig.json') }}-${{ github.sha }}
+
+      # The two gates the fee port added. `check:port` re-runs the import
+      # codemod and fails if anything is left to rewrite — it has caught
+      # three silent breakages already, each of which compiled cleanly:
+      # this app's own repos reading the fee schema, its shell reading the
+      # fee navigation map, and a deliberate fix being rewritten back.
+      - name: Ported imports
+        run: npm run check:port
+
+      # docs/maps/repo-map.md is generated from the tracked tree so agents can
+      # trust it; this fails when a PR adds or moves a folder without
+      # regenerating it (`npm run docs:map`).
+      - name: Repo map is current
+        run: npm run docs:map:check
+
+      # NOT RUN on CI: the School Fees repo is private and this job's token
+      # cannot check it out. The script says so with a warning annotation and
+      # a step-summary line instead of a silent pass, so a green job is never
+      # read as "parity verified". Reproduce locally with
+      # `SCHOOLFEES_REPO=../schoolfees npm run check:theme -- --require`.
+      - name: Theme parity
+        run: npm run check:theme
+
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Tests
+        run: npm run test
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        id: node
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+
+      # What the machine has, printed for the day a build is stopped
+      # mid-compile again ("The runner has received a shutdown signal").
+      - name: Runner size
+        run: nproc && free -m
+
+      # This repository is private, so the runner has 2 CPUs and 8 GB,
+      # not 16. On 15 Nov 2026 the build of Chats with Needs you (PR 390)
+      # peaked at 5.7 GB in one process and GitHub's AWS runners stopped it
+      # mid-compile twice. Now (D-638): webpack compiles in workers, one
+      # compilation at a time (next.config.ts, everywhere); and here only,
+      # VPPSONE_CI_BUILD keeps webpack's cache in memory and skips the build's
+      # own type check, which repeated the types job's `next typegen && tsc`
+      # (the gate) and needed a 6 GB heap. 4 GB is room for one compilation.
+      - name: Build
+        run: npm run build
+        env:
+          VPPSONE_CI_BUILD: "1"
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Route bundle budgets
+        run: npm run check:bundles
+
+  # The required check. Green only if every child succeeded: a failed,
+  # cancelled or skipped child makes this red, so the ruleset cannot be
+  # satisfied by a partial run.
+  check:
+    if: always()
+    needs: [types, lint, tests, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: All gates passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | node -e '
+            const needs = JSON.parse(require("fs").readFileSync(0, "utf8"));
+            let ok = true;
+            for (const [job, { result }] of Object.entries(needs)) {
+              console.log(`${job}: ${result}`);
+              if (result !== "success") ok = false;
+            }
+            if (!ok) { console.error("::error::a required CI gate did not succeed"); process.exit(1); }
+          '

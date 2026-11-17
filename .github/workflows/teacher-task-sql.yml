@@ -1,0 +1,119 @@
+name: Teacher task SQL scope
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+# Only obsolete PR test runs may be cancelled; main/manual runs stay independent.
+concurrency:
+  group: teacher-task-sql-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install disposable in-memory PostgreSQL runtime
+        run: npm install --prefix "$RUNNER_TEMP/task-sql" --no-package-lock @electric-sql/pglite@0.5.10
+      - name: Execute migration against synthetic schema and exercise scope
+        run: node tests/sql/teacher-tasks.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+      - name: Exercise reviewed task delivery and legacy guards
+        run: node tests/sql/teacher-task-delivery.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+      - name: Exercise photo proposals and legacy administrator review
+        run: |
+          node tests/sql/profile-photos.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+          node tests/sql/legacy-teacher-review.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+          node tests/sql/teacher-task-canonical-writers.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+          node tests/sql/teacher-task-credential-regressions.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+      - name: Exercise certificate requests (ask, approve and sign, decline, download)
+        run: node tests/sql/certificate-requests.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+      - name: Exercise Link my WhatsApp (codes, the link, test numbers, grants)
+        run: node tests/sql/staff-whatsapp-link.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+      - name: Exercise Did this answer help? (asked once, the tap kept, one office hand-off per no)
+        run: node tests/sql/parent-helper-ratings.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+      - name: Exercise sign in with a WhatsApp code (limits, one-time check, no enumeration, grants)
+        run: node tests/sql/staff-sign-in-codes.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+      - name: Exercise sick-day notes (one per child per day, the first stands, service role only)
+        run: node tests/sql/parent-absence-notes.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+      - name: Exercise teach it once (one row per question, counted again, practice apart, service role only)
+        run: node tests/sql/parent-helper-lessons.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+      - name: Exercise a school visit booked on WhatsApp (one enquiry per hand-off, visit day and part together)
+        run: node tests/sql/parent-helper-visits.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+      - name: Exercise parents' suggestions (nothing written until a person applies it; who decides, expiry, undo)
+        run: node tests/sql/parent-suggestions.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+      - name: Exercise chats with parents (one chat per desk, a repeated tap kept once, ticks forward only, one-tap links, passing on and joining, finishing by itself)
+        run: |
+          node tests/sql/parent-chats.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+          node tests/sql/parent-chats-pass.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+          node tests/sql/parent-chats-finish.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+      - name: Exercise Needs you (own to-dos, done only on a complete read, plans, service role only)
+        run: node tests/sql/needs-you.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+      - name: Exercise marks that send themselves (after the due day, every child marked and two quiet hours, never a locked class, service role only)
+        run: node tests/sql/marks-send-themselves.mjs "$RUNNER_TEMP/task-sql/node_modules/@electric-sql/pglite"
+  lock-order:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: teacher_task_ci
+          POSTGRES_PASSWORD: disposable-ci-only
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d teacher_task_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'psycopg[binary]>=3.2,<4'
+      - name: Prove task create/restart lock order with two real connections
+        run: python tests/sql/teacher-task-locks.py
+  photo-authority-after-wait:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: profile_photo_ci
+          POSTGRES_PASSWORD: disposable-ci-only
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d profile_photo_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'psycopg[binary]>=3.2,<4'
+      - name: Prove current photo authority after command and staff lock waits
+        run: python tests/sql/profile-photo-locks.py
+  task-delivery-locks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: task_delivery_ci
+          POSTGRES_PASSWORD: disposable-ci-only
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d task_delivery_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'psycopg[binary]>=3.2,<4'
+      - name: Prove task delivery claims and current authority after observed waits
+        run: python tests/sql/teacher-task-delivery-locks.py

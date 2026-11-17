@@ -1,0 +1,62 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["bom1"],
+  "crons": [
+    {
+      "path": "/api/jobs/open-registers",
+      "schedule": "45 1 * * *"
+    },
+    {
+      "path": "/api/jobs/attendance-reminder",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/jobs/missing-marks-nudge",
+      "schedule": "30 11 * * 0"
+    },
+    {
+      "path": "/api/jobs/daily-summary",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/jobs/staff-notices",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/jobs/assist-prepare",
+      "schedule": "5 2 * * *"
+    },
+    {
+      "path": "/api/jobs/fee-day-summary",
+      "schedule": "30 13 * * *"
+    },
+    {
+      "path": "/api/jobs/fee-day-not-closed",
+      "schedule": "30 14 * * *"
+    },
+    {
+      "path": "/api/jobs/document-backup",
+      "schedule": "30 21 * * *"
+    },
+    {
+      "path": "/api/jobs/drive-backup",
+      "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/jobs/health",
+      "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/jobs/assist-log-purge",
+      "schedule": "0 21 * * *"
+    },
+    {
+      "path": "/api/jobs/builtin-ai-purge",
+      "schedule": "25 21 * * *"
+    },
+    {
+      "path": "/api/jobs/ai-connection-purge",
+      "schedule": "15 22 * * *"
+    }
+  ]
+}

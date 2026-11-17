@@ -1,0 +1,1003 @@
+import "server-only";
+
+import { getAssistSettings } from "@/modules/assist/data/settings";
+import { liveChatInboundDeps, routeChatInbound } from "@/modules/chats/data/inbound";
+import { deliverHeldMessages, liveChatSendDeps } from "@/modules/chats/data/send";
+import { inboundContent, type ChatInboundMessage } from "@/modules/chats/domain/inbound";
+import type { ChildFacts } from "@/modules/whatsapp/domain/helper-facts";
+import { handoffRegarding, planFromAnswer } from "@/modules/whatsapp/domain/helper-ai";
+import { familyWords, lessonNoteFor, NO_KNOWLEDGE, type LessonNote, type SchoolKnowledge } from "@/modules/whatsapp/domain/helper-lessons";
+import { helperMessageBody, plainVersion, type HelperMessage } from "@/modules/whatsapp/domain/helper-messages";
+import {
+  EMPTY_CHAT,
+  MAX_MESSAGE_AGE_MINUTES,
+  dailyTurnCap,
+  isLateHour,
+  messageSkip,
+  needsVisitCalendar,
+  planTurn,
+  practiceIdsFor,
+  type ChatPatch,
+  type ChatState,
+  type HandoffPlan,
+  type ReceiptSend,
+  type ReportCardSend,
+  type TurnPlan,
+  type TurnRoute,
+} from "@/modules/whatsapp/domain/helper-plan";
+import {
+  fallbackReply,
+  handoffFailedReply,
+  ratingReply,
+  recordsUnreadableReply,
+  type Family,
+  type HandoffTarget,
+  type RatingOutcome,
+  type ReplyContext,
+} from "@/modules/whatsapp/domain/helper-replies";
+import { readNoteTap } from "@/modules/whatsapp/domain/helper-away-note";
+import { NOT_HELPED_TOPIC, isAcknowledgement } from "@/modules/whatsapp/domain/helper-handoff";
+import { detectLanguage, messageKind, readTap, type HelperLanguage, type MessageKind, type RatingValue } from "@/modules/whatsapp/domain/helper-text";
+import { VISIT_NAME_NOT_GIVEN, type VisitCalendar } from "@/modules/whatsapp/domain/helper-visit";
+import type { SuggestionDraft } from "@/modules/whatsapp/domain/parent-suggestions";
+import { schoolToday } from "@/platform/dates";
+import { logInfo, logWarn } from "@/platform/observability/log";
+import { readWhatsAppConfig, type WhatsAppConfig } from "@/platform/whatsapp/config";
+import { maskNumber, sameNumber } from "@/platform/whatsapp/numbers";
+import { checkWhatsAppSend, type WhatsAppSwitches } from "@/platform/whatsapp/policy";
+import { HUB_CODES, providerFor, type ClaimResult, type ProviderSendResult } from "@/platform/whatsapp/providers";
+import { readSwitches } from "@/platform/whatsapp/store";
+import type { WebhookInbound } from "@/platform/whatsapp/webhook";
+
+import { askHelperClaude, hasClaudeKey, type ClaudeTurn } from "./helper-claude";
+import { noteLesson, readSchoolKnowledge } from "./helper-lessons";
+import {
+  deliverWaitingAnswers,
+  handleStaffAnswer,
+  liveRelayDeps,
+  openHandoff,
+  rateAnswer,
+  type OpenHandoffInput,
+  type RateResult,
+} from "./helper-relay";
+import { handleStaffCommand, liveStaffHelperDeps } from "./staff-helper";
+import { prepareHelperReceipt, type ReceiptDocument, type ReceiptRequest } from "./helper-receipt";
+import { prepareHelperReportCard, type ReportCardDocument, type ReportCardRequest } from "./helper-report-card";
+import { readVisitCalendar } from "./helper-visit";
+import { addParentSuggestion } from "./parent-suggestions";
+import { handleStaffLink, liveStaffLinkDeps } from "./staff-link";
+import {
+  finishTurn,
+  insertHandoff,
+  pickHandoffStaff,
+  readBudget,
+  readChat,
+  readChildFacts,
+  readHelperSettings,
+  saveChat,
+  startTurn,
+  type HelperSettings,
+  type TurnFinish,
+  type TurnStages,
+} from "./helper-store";
+
+/**
+ * One message to the school's number, answered by KMD AI (D-574).
+ *
+ * The hub forwards every message parents write; this decides, for each,
+ * whether One answers it or leaves it to the hub's own bot. One answers only
+ * when ALL of these hold, checked in this order, and stays quiet otherwise:
+ *
+ *  1. It is something the helper can read (text, a tap, a voice note, a
+ *     photo), and it arrived in the last ten minutes.
+ *     (Before the rest: a member of staff answering a hand-off by swiping on
+ *     its alert, D-578, one linking their WhatsApp with a code, D-582, and
+ *     anything a linked member of staff writes, answered as their role's
+ *     desk, D-591 and D-607; the owner's number too, in the role it is
+ *     trying, until it writes *as parent*. None is a parent's message.)
+ *  2. The number is one the helper knows. Step 1 knows exactly one: the
+ *     owner's test number, standing for the practice children.
+ *  3. The school's number may send this number a typed message right now
+ *     (`checkWhatsAppSend`: the `parent_helper` switch, practice mode, the
+ *     owner-only rule while real recipients are off).
+ *  4. The message has something to answer (not a STOP, not empty, not a tap
+ *     on somebody else's button).
+ *  5. The number has had fewer than 40 answers today (200 on the owner's
+ *     test number, which tries every side of the helper, D-607).
+ *  6. The message is not already being answered (the ledger row's unique
+ *     message id), and the hub gives it to One (`POST /v1/typing`). The hub
+ *     says no when a person in the office is handling the chat, when the
+ *     message is too old, or when its bot got there first.
+ *
+ * The family's records, the chat and the AI switch are read while the hub is
+ * asked, so the parent sees the blue ticks and the typing dots without
+ * waiting for them (D-605); records that cannot be read, or name no child,
+ * are answered with words that say so. Only then is Claude asked (when the
+ * message needs it) and the reply sent.
+ * Nothing a parent writes changes a child's record or the school's (D-598):
+ * a child's absence, a school visit or a detail to change becomes a
+ * suggestion that a person at school applies or lets go.
+ * Claude also reads the answers the school has written for every family, and
+ * a general question nothing answers goes onto the list in One that an admin
+ * answers once (D-589). A receipt the parent asks for goes as its PDF
+ * (D-597), or, when it cannot be made or Meta refuses it, as the words that
+ * say so.
+ * Every step before the claim is free to give up: the hub's bot answers a few
+ * seconds later as it always has. After the claim One must answer, so
+ * everything after it ends in a message: Claude's, the card, or the menu.
+ *
+ * What the parent wrote is never stored here, except a hand-off, which is the
+ * parent's message put in front of the school on purpose. The hub keeps the
+ * conversation (`messages` in its own database), as it keeps every other.
+ */
+
+export type HelperOutcome =
+  | { outcome: "skipped"; reason: string }
+  | { outcome: "not_claimed"; reason: string }
+  | { outcome: "answered"; route: TurnRoute; intent: string; handoff: HandoffTarget | null }
+  /** Kept in a chat with a person at school (D-616); the helper does not answer it. */
+  | { outcome: "chat"; why: string; duplicate: boolean }
+  | { outcome: "failed"; reason: string };
+
+/** Everything the turn reads and writes, so a test can stand in for each. */
+export type HelperDeps = {
+  now: () => Date;
+  readConfig: () => WhatsAppConfig;
+  readSwitches: () => Promise<WhatsAppSwitches | null>;
+  readSettings: () => Promise<HelperSettings | null>;
+  readChildFacts: (studentIds: readonly string[]) => Promise<ChildFacts[] | null>;
+  readChat: (from: string) => Promise<ChatState>;
+  saveChat: (from: string, patch: ChatPatch, at: Date) => Promise<void>;
+  readBudget: (from: string, now: Date) => Promise<{ spentUsd: number; turnsToday: number } | null>;
+  /** The AI helper's switch and the school's monthly AI budget, or null when unreadable. */
+  readAiSettings: () => Promise<{ enabled: boolean; monthlyBudgetUsd: number } | null>;
+  hasClaudeKey: () => boolean;
+  askClaude: typeof askHelperClaude;
+  startTurn: typeof startTurn;
+  finishTurn: (providerMessageId: string, finish: TurnFinish) => Promise<void>;
+  /** Null when the provider cannot claim a message (only the hub can). */
+  claim: ((wamid: string) => Promise<ClaimResult>) | null;
+  send: (body: Record<string, unknown>) => Promise<ProviderSendResult>;
+  pickHandoffStaff: (target: HandoffTarget, child: ChildFacts | null, sessionLabel: string) => Promise<string | null>;
+  insertHandoff: typeof insertHandoff;
+  /** Step 2 (D-578): a swiped reply to one of the helper's alerts, handled; null when the message is not one. */
+  staffAnswer?: (message: WebhookInbound) => Promise<HelperOutcome | null>;
+  /** Step 2: answers that waited for this parent to write again, sent now; how many went. */
+  deliverWaiting?: (from: string) => Promise<number>;
+  /** Step 2: the person a hand-off is for is told, now or at 6 am. */
+  openHandoff?: (input: OpenHandoffInput) => Promise<unknown>;
+  /** A member of staff linking their WhatsApp with the code One gave them (D-582); null when the message carries none. */
+  staffLink?: (message: WebhookInbound) => Promise<HelperOutcome | null>;
+  /**
+   * A linked member of staff, or the owner's number in a role, asking their
+   * desk (D-591, D-607); null when it is not that. Given the turn's own read
+   * of the switches, so a parent's message never waits for it twice.
+   */
+  staffCommand?: (message: WebhookInbound, switches: Promise<WhatsAppSwitches | null>) => Promise<HelperOutcome | null>;
+  /**
+   * A parent writing in a chat with a person at school (D-616): a swiped
+   * reply to it, words to an answer that waited for them, or more while a
+   * person is answering. Kept in the chat; null leaves it to the helper.
+   */
+  chatInbound?: (message: WebhookInbound, switches: Promise<WhatsAppSwitches | null>) => Promise<HelperOutcome | null>;
+  /** A tap on "Did this answer help?", kept against this number's own hand-offs (D-584). */
+  rateAnswer?: (input: { from: string; key: string; value: RatingValue }) => Promise<RateResult>;
+  /**
+   * Something the parent said that may belong in a record, put in front of a
+   * person at school (D-598): a child who will be away (D-588), a school
+   * visit (D-592), a detail to change. Nothing is written until that person
+   * applies it. True when it waits, or was already waiting.
+   */
+  suggest?: (draft: SuggestionDraft) => Promise<boolean>;
+  /** The school's answers and the questions it leaves to people, for this kind of chat (D-589); null when unreadable. */
+  readKnowledge?: (practice: boolean) => Promise<SchoolKnowledge | null>;
+  /** An answer's note on the "teach it once" list; the lesson it landed on, or null. */
+  noteLesson?: (note: LessonNote, practice: boolean, topic: string | null) => Promise<string | null>;
+  /** The calendar a school visit's days come from (D-592); null when unreadable. */
+  readVisitCalendar?: (sessionLabel: string, today: string) => Promise<VisitCalendar | null>;
+  /** A receipt the parent asked for, as a PDF Meta fetches once (D-597); null when it could not be made. */
+  prepareReceipt?: (request: ReceiptRequest) => Promise<ReceiptDocument | null>;
+  /** A child's issued report card, as a PDF Meta fetches once (D-613); null when it could not be made. */
+  prepareReportCard?: (request: ReportCardRequest) => Promise<ReportCardDocument | null>;
+};
+
+/** The real database, the real hub and the real Claude. */
+export function liveHelperDeps(): HelperDeps {
+  const config = readWhatsAppConfig();
+  const provider = config.ok ? providerFor(config) : null;
+  const claimMessage = provider?.claimMessage;
+  const relay = liveRelayDeps();
+  const link = liveStaffLinkDeps(config);
+  const staff = liveStaffHelperDeps(config);
+  return {
+    now: () => new Date(),
+    readConfig: () => config,
+    readSwitches: () => readSwitches(),
+    readSettings: () => readHelperSettings(),
+    readChildFacts: (ids) => readChildFacts(ids),
+    readChat: (from) => readChat(from),
+    saveChat: (from, patch, at) => saveChat(from, patch, at),
+    readBudget: (from, now) => readBudget(from, now),
+    readAiSettings: async () => {
+      try {
+        const settings = await getAssistSettings();
+        return { enabled: settings.enabled, monthlyBudgetUsd: settings.monthlyBudgetUsd };
+      } catch {
+        return null;
+      }
+    },
+    hasClaudeKey,
+    askClaude: askHelperClaude,
+    startTurn: (row) => startTurn(row),
+    finishTurn: (id, finish) => finishTurn(id, finish),
+    claim: claimMessage ? (wamid) => claimMessage(wamid) : null,
+    send: (body) =>
+      provider
+        ? provider.send(body)
+        : Promise.resolve({ outcome: "unknown", httpStatus: null, errorCode: "network", errorTitle: "WhatsApp is not set up here." }),
+    pickHandoffStaff: (target, child, sessionLabel) => pickHandoffStaff(target, child, sessionLabel),
+    insertHandoff: (row) => insertHandoff(row),
+    staffAnswer: (message) => handleStaffAnswer(message, relay),
+    // Answers from the old hand-offs, and messages from the parent's chats (D-616), that waited for them to write.
+    deliverWaiting: async (from) => {
+      const [answers, held] = await Promise.all([
+        deliverWaitingAnswers(from, relay).catch(() => 0),
+        deliverHeldMessages({ parentE164: from }, liveChatSendDeps()).catch(() => ({ sent: 0 })),
+      ]);
+      return answers + held.sent;
+    },
+    openHandoff: (input) => openHandoff(input, relay),
+    staffLink: (message) => handleStaffLink(message, link),
+    staffCommand: (message, switches) => handleStaffCommand(message, staff, switches),
+    chatInbound: async (message, switches) => {
+      const kept = await routeChatInbound(message, await switches, liveChatInboundDeps(claimMessage ? (wamid) => claimMessage(wamid) : null));
+      return kept ? { outcome: "chat", why: kept.why, duplicate: kept.duplicate } : null;
+    },
+    rateAnswer: (input) => rateAnswer(input, relay),
+    suggest: async (draft) => (await addParentSuggestion(draft)) !== null,
+    readKnowledge: (practice) => readSchoolKnowledge(practice),
+    noteLesson: (note, practice, topic) => noteLesson(note, practice, topic),
+    readVisitCalendar: (sessionLabel, today) => readVisitCalendar(sessionLabel, today),
+    prepareReceipt: (request) => prepareHelperReceipt(request),
+    prepareReportCard: (request) => prepareHelperReportCard(request),
+  };
+}
+
+const skip = (reason: string): HelperOutcome => ({ outcome: "skipped", reason });
+
+/** Why the hub kept the message, in a word or two, for the ledger. */
+function claimRefusal(claim: ClaimResult): string {
+  if (!claim.ok) return `claim_failed:${claim.httpStatus ?? "network"}`;
+  if (claim.staff) return "staff_handling";
+  if (claim.stale) return "stale";
+  return `taken_by:${claim.takenBy ?? "other"}`;
+}
+
+/** Meta may refuse an interactive message it would take as plain words; the hub's own refusals stand. */
+function worthPlainRetry(result: ProviderSendResult, message: HelperMessage): boolean {
+  if (result.outcome !== "rejected" || message.kind === "text") return false;
+  const code = result.errorCode ?? "";
+  return !(HUB_CODES as readonly string[]).includes(code) && code !== "bad_api_key";
+}
+
+/**
+ * One message to the parent, and its retry when Meta refuses it: a refused
+ * PDF goes as the words that say it could not be sent (D-597), never as a
+ * caption promising a file, and a refused card as plain words.
+ */
+async function deliver(deps: HelperDeps, to: string, outgoing: Outgoing): Promise<{ sent: ProviderSendResult; note: string | null }> {
+  const { message, fallback } = outgoing;
+  const sent = await deps.send(helperMessageBody(to, message));
+  if (!worthPlainRetry(sent, message)) return { sent, note: null };
+  const document = message.kind === "document";
+  const retry = document && fallback ? fallback : plainVersion(message);
+  let again = await deps.send(helperMessageBody(to, retry));
+  if (document && worthPlainRetry(again, retry)) again = await deps.send(helperMessageBody(to, plainVersion(retry)));
+  return { sent: again, note: document ? "receipt_refused" : "sent_as_plain_text" };
+}
+
+/**
+ * The hub has given the message to One and the parent sees the typing dots,
+ * but there is nothing to answer from: the family's records could not be
+ * read, or name no child (D-605). Before, the helper stayed out of these
+ * before claiming and the hub's bot answered; now that the claim comes first,
+ * the parent is told why in their own language rather than left waiting.
+ */
+async function answerWithoutRecords(input: {
+  message: WebhookInbound;
+  deps: HelperDeps;
+  sentAt: number;
+  stages: TurnStages;
+  language: HelperLanguage;
+  reason: string;
+}): Promise<HelperOutcome> {
+  const { message, deps, sentAt, stages, language, reason } = input;
+  const sending = deps.now().getTime();
+  const sent = await deps.send(helperMessageBody(message.from, recordsUnreadableReply(language)));
+  const finished = deps.now();
+  stages.send = finished.getTime() - sending;
+  const common: TurnFinish = { status: "answered", intent: "fallback", route: "fallback", latencyMs: finished.getTime() - sentAt, stages };
+  if (sent.outcome !== "accepted") {
+    const failed = sent.outcome === "unknown" ? `send_unknown:${sent.errorCode}` : `send_rejected:${sent.errorCode ?? sent.httpStatus}`;
+    await deps.finishTurn(message.providerMessageId, { ...common, status: "failed", reason: `${reason};${failed}` });
+    return { outcome: "failed", reason: failed };
+  }
+  await deps.finishTurn(message.providerMessageId, { ...common, reason, replyMessageId: sent.messageId });
+  await deps.saveChat(message.from, {}, finished).catch(() => undefined);
+  return { outcome: "answered", route: "fallback", intent: "fallback", handoff: null };
+}
+
+type Reply = {
+  message: HelperMessage;
+  intent: string;
+  route: TurnRoute;
+  chat: ChatPatch;
+  handoff: HandoffPlan | null;
+  /** Receipts to send as their PDFs (D-597), one after another (D-606). */
+  receipts?: readonly ReceiptSend[] | null;
+  /** Report cards to send as their PDFs (D-613), one after another, as receipts are. */
+  reportCards?: readonly ReportCardSend[] | null;
+  /** Sent after the report cards: the other children's results (D-613). */
+  trailing?: HelperMessage | null;
+};
+
+/** A message to the parent, and the words that go in its place when Meta refuses it (a receipt's PDF, D-597). */
+type Outgoing = { message: HelperMessage; fallback: HelperMessage | null };
+
+type Composed = {
+  reply: Reply;
+  claude: ClaudeTurn | null;
+  parentReplyId: string | null;
+  handedTo: HandoffTarget | null;
+  note: string | null;
+  /** A "no" to an answer, written into Messages: the office's hand-off to open once the parent has been told (D-584). */
+  followUp: OpenHandoffInput | null;
+  /** What this answer adds to the "teach it once" list, written once the reply has gone (D-589). */
+  lesson: LessonNote | null;
+  /** When the message is a receipt's PDF (D-597): the words that say it could not be sent, for a refusal. */
+  fallback: HelperMessage | null;
+  /** More receipts' PDFs, sent after the reply, in order (D-606). */
+  more: Outgoing[];
+};
+
+/** The reply, once the message is One's: Claude's answer or the planned card, and any hand-off written first. */
+async function compose(input: {
+  message: WebhookInbound;
+  plan: Exclude<TurnPlan, { action: "skip" } | { action: "rate" }>;
+  settings: HelperSettings;
+  family: Family;
+  children: ChildFacts[];
+  context: ReplyContext;
+  deps: HelperDeps;
+  now: Date;
+  sentAt: number;
+  /** Read beside the family's records; awaited only when Claude is asked. */
+  knowledge: Promise<SchoolKnowledge | null>;
+}): Promise<Composed> {
+  const { message, plan, settings, family, children, context, deps, now } = input;
+  const text = (message.text ?? "").trim();
+  let reply: Reply;
+  let claude: ClaudeTurn | null = null;
+  let note: string | null = null;
+  let lesson: LessonNote | null = null;
+
+  if (plan.action === "ask_ai") {
+    const school = await input.knowledge;
+    claude = await deps.askClaude({
+      helperName: settings.helperName,
+      family,
+      text,
+      language: plan.language,
+      firstContact: plan.firstContact,
+      now,
+      knowledge: school ?? NO_KNOWLEDGE,
+    });
+    if (claude.answer) {
+      // Nothing goes on the list when the school's answers could not be read: Claude did not see them.
+      lesson = school ? lessonNoteFor(claude.answer, school, familyWords(children, message.fromName)) : null;
+      const answered = planFromAnswer(claude.answer, { family, helperName: settings.helperName, text, now });
+      reply = {
+        message: answered.message,
+        intent: answered.intent,
+        route: claude.careful ? "ai_careful" : "ai",
+        chat: { ...plan.chat, ...answered.chat },
+        handoff: answered.handoff,
+        receipts: answered.receipts ?? null,
+        reportCards: answered.reportCards ?? null,
+        trailing: answered.trailing ?? null,
+      };
+    } else {
+      reply = { message: fallbackReply(context), intent: "fallback", route: "fallback", chat: plan.chat, handoff: null };
+      note = `ai_${claude.problem ?? "no_answer"}`;
+    }
+  } else {
+    reply = {
+      message: plan.message,
+      intent: plan.intent,
+      route: plan.route,
+      chat: plan.chat,
+      handoff: plan.handoff,
+      receipts: plan.receipts ?? null,
+      reportCards: plan.reportCards ?? null,
+      trailing: plan.trailing ?? null,
+    };
+  }
+
+  // A hand-off goes into One's Messages inbox before the parent is told it has.
+  let parentReplyId: string | null = null;
+  let handedTo: HandoffTarget | null = null;
+  if (reply.handoff) {
+    const handoff = reply.handoff;
+    const anchor = handoff.child ?? children[0];
+    const staffId = await deps.pickHandoffStaff(handoff.target, handoff.child, anchor.sessionLabel).catch(() => null);
+    parentReplyId = await deps.insertHandoff({
+      sessionLabel: anchor.sessionLabel,
+      fromName: message.fromName ?? "Parent",
+      fromPhone: message.from,
+      studentId: handoff.child?.studentId ?? null,
+      studentLabel: handoff.child ? [handoff.child.firstName, handoff.child.className].filter(Boolean).join(" · ") : null,
+      regarding: handoffRegarding(settings.helperName, handoff.topic, claude?.answer?.summary ?? handoff.summary ?? null, handoff.body),
+      body: handoff.body,
+      receivedAt: new Date(input.sentAt).toISOString(),
+      assignedStaffId: staffId,
+    });
+    if (parentReplyId) handedTo = handoff.target;
+    else {
+      reply = { ...reply, message: handoffFailedReply({ ...context, firstContact: false }) };
+      note = "handoff_not_saved";
+    }
+    // What belongs in a record waits, once the hand-off is in Messages, for a
+    // person at school to apply it or let it go (D-598): nothing about the
+    // child or the school changes on the parent's word.
+    const suggest = (draft: SuggestionDraft): Promise<boolean> => (deps.suggest ? deps.suggest(draft).catch(() => false) : Promise.resolve(false));
+    // A child who will be away, for the class teacher (D-588). The parent is
+    // told about the register only when it waits for someone.
+    const away = handoff.absence;
+    if (parentReplyId && away && handoff.child) {
+      const { studentId, sessionLabel } = handoff.child;
+      const kept = await suggest({ kind: "absence", sessionLabel, studentId, parentReplyId, practice: family.practice, payload: { days: away.days, reason: away.reason } });
+      if (!kept) {
+        reply = { ...reply, message: away.unsaved };
+        note = "absence_not_kept";
+      }
+    }
+    // A detail to change, for the office to check. The parent is told the
+    // office checks it only when it waits for someone.
+    const change = handoff.change;
+    if (parentReplyId && change && handoff.child) {
+      const { studentId, sessionLabel } = handoff.child;
+      const kept = await suggest({ kind: "record", sessionLabel, studentId, parentReplyId, practice: family.practice, payload: { field: change.field, value: change.value } });
+      if (!kept) {
+        reply = { ...reply, message: change.unsaved };
+        note = "change_not_kept";
+      }
+    }
+    // A school visit, for the office to put on the Admissions board (D-592).
+    // The parent was told the office has it, which stays true either way.
+    const visit = handoff.visit;
+    if (parentReplyId && visit) {
+      const kept = await suggest({
+        kind: "visit",
+        sessionLabel: anchor.sessionLabel,
+        studentId: null,
+        parentReplyId,
+        practice: family.practice,
+        payload: { day: visit.day, part: visit.part, child_name: visit.childName ?? VISIT_NAME_NOT_GIVEN, class_label: visit.classLabel },
+      });
+      if (!kept) note = "visit_not_kept";
+    }
+  }
+
+  // The receipts the parent asked for go as their PDFs, made side by side; a
+  // receipt whose PDF cannot be made goes as the words that say so, with a
+  // button to try again (D-597). The first is the reply, the rest follow it (D-606).
+  let fallback: HelperMessage | null = null;
+  let more: Outgoing[] = [];
+  const asked = reply.receipts ?? [];
+  if (asked.length > 0) {
+    const prepare = deps.prepareReceipt;
+    const documents = await Promise.all(
+      asked.map((item) =>
+        prepare
+          ? prepare({ studentId: item.child.studentId, sessionLabel: item.child.sessionLabel, receiptNumber: item.receipt.number, practice: family.practice }).catch(
+              () => null,
+            )
+          : Promise.resolve(null),
+      ),
+    );
+    const outgoing = asked.map((item, index): Outgoing => {
+      const document = documents[index];
+      return document
+        ? { message: { kind: "document", link: document.link, filename: document.filename, caption: item.caption }, fallback: item.unsent }
+        : { message: item.unsent, fallback: null };
+    });
+    if (documents.some((document) => !document)) note = note ?? "receipt_not_made";
+    const [first, ...rest] = outgoing;
+    reply = { ...reply, message: first.message };
+    fallback = first.fallback;
+    more = rest;
+  }
+
+  // Each child's report card goes as its PDF, made side by side from the card
+  // the school issued; one that cannot be made goes as its line with a button
+  // to try again (D-613). The first is the reply, the rest follow it, and the
+  // other children's results come last.
+  const cards = asked.length > 0 ? [] : (reply.reportCards ?? []);
+  if (cards.length > 0) {
+    const prepare = deps.prepareReportCard;
+    const documents = await Promise.all(
+      cards.map((item) =>
+        prepare
+          ? prepare({
+              studentId: item.child.studentId,
+              sessionLabel: item.child.sessionLabel,
+              term: item.term,
+              revision: item.revision,
+              releasedCodes: item.releasedCodes,
+              title: item.title,
+              classTeacher: item.child.classTeacher?.name ?? null,
+              practice: family.practice,
+            }).catch(() => null)
+          : Promise.resolve(null),
+      ),
+    );
+    const outgoing = cards.map((item, index): Outgoing => {
+      const document = documents[index];
+      return document
+        ? { message: { kind: "document", link: document.link, filename: document.filename, caption: item.caption }, fallback: item.unsent }
+        : { message: item.unsent, fallback: null };
+    });
+    if (documents.some((document) => !document)) note = note ?? "report_card_not_made";
+    const [first, ...rest] = outgoing;
+    reply = { ...reply, message: first.message };
+    fallback = first.fallback;
+    more = reply.trailing ? [...rest, { message: reply.trailing, fallback: null }] : rest;
+  }
+  return { reply, claude, parentReplyId, handedTo, note, followUp: null, lesson, fallback, more };
+}
+
+/**
+ * A tap on "Did this answer help?" (D-584). The tap is kept against the
+ * number's own hand-off; a "no" is written into Messages for the school
+ * office before the parent is told it has been passed on, with what they
+ * asked and the answer that did not help, and the office is told once the
+ * reply has gone. A tap that names none of this number's hand-offs changes
+ * nothing: a yes is thanked, a no is shown the way to the office.
+ */
+async function composeRating(input: {
+  message: WebhookInbound;
+  plan: Extract<TurnPlan, { action: "rate" }>;
+  settings: HelperSettings;
+  context: ReplyContext;
+  deps: HelperDeps;
+  now: Date;
+  sentAt: number;
+}): Promise<Composed> {
+  const { message, plan, settings, deps, now } = input;
+  const unknown: RateResult = { outcome: "unknown" };
+  const rated = deps.rateAnswer ? await deps.rateAnswer({ from: message.from, key: plan.key, value: plan.value }).catch(() => unknown) : unknown;
+  // The reply in the language the question was asked in.
+  const context: ReplyContext = rated.outcome === "unknown" ? input.context : { ...input.context, language: rated.handoff.language, firstContact: false };
+  const reply = (outcome: RatingOutcome, intent: string): Reply => ({
+    message: ratingReply(context, outcome, isLateHour(now)),
+    intent,
+    route: "tap",
+    chat: plan.chat,
+    handoff: null,
+  });
+  const none = { claude: null, parentReplyId: null, handedTo: null, note: null, followUp: null, lesson: null, fallback: null, more: [] };
+  switch (rated.outcome) {
+    case "unknown":
+      return { ...none, reply: reply(plan.value === "helped" ? "helped" : "ask_office", "rating_unknown") };
+    case "helped":
+      return { ...none, reply: reply("helped", "rated_helped") };
+    case "already":
+      return { ...none, reply: reply("already", "rating_already") };
+    case "already_passed_on":
+      return { ...none, reply: reply("already_passed_on", "rating_passed_already") };
+    case "not_saved":
+      return { ...none, reply: reply("not_passed_on", "rating_not_saved"), note: "rating_not_saved" };
+    case "pass_on": {
+      const first = rated.handoff;
+      const staffId = await deps.pickHandoffStaff("office", null, first.sessionLabel).catch(() => null);
+      const parentReplyId = await deps
+        .insertHandoff({
+          sessionLabel: first.sessionLabel,
+          fromName: first.fromName,
+          fromPhone: message.from,
+          studentId: first.studentId,
+          studentLabel: first.studentLabel,
+          regarding: handoffRegarding(settings.helperName, "👎 answer did not help", first.body, rated.body),
+          body: rated.body,
+          receivedAt: new Date(input.sentAt).toISOString(),
+          assignedStaffId: staffId,
+        })
+        .catch(() => null);
+      if (!parentReplyId) return { ...none, reply: reply("not_passed_on", "rating_not_saved"), note: "handoff_not_saved" };
+      return {
+        ...none,
+        reply: reply("passed_on", "rated_not_helped"),
+        parentReplyId,
+        handedTo: "office",
+        followUp: {
+          parentReplyId,
+          parentE164: message.from,
+          language: first.language,
+          target: "office",
+          topic: NOT_HELPED_TOPIC,
+          child: null,
+          aboutName: first.aboutName,
+          followUpOf: first.id,
+          sessionLabel: first.sessionLabel,
+          fromName: first.fromName,
+          practice: first.practice,
+          aboutStudentId: first.studentId,
+          body: rated.body,
+          staffNote: rated.body,
+        },
+      };
+    }
+  }
+}
+
+/** The parent's message as a line in their chat (D-616); null when it cannot be one. */
+function saidOf(message: WebhookInbound): ChatInboundMessage | null {
+  const content = inboundContent({ type: message.type, text: message.text, raw: message.raw });
+  return content ? { ...content, wamid: message.providerMessageId, at: message.at, replyTo: message.replyTo } : null;
+}
+
+/** What the parent read from the helper, as words (D-616): a card's text with its options, a PDF's caption. */
+function readAs(message: HelperMessage): string {
+  const plain = plainVersion(message);
+  return plain.kind === "text" ? plain.text : "";
+}
+
+/**
+ * The parent's message kept in their chat with a person at school (D-616),
+ * or null when it belongs to no chat. Answers from the old hand-offs that
+ * waited for this parent to write go too, as they would on a helper's turn.
+ */
+async function keepInChat(message: WebhookInbound, deps: HelperDeps, switches: Promise<WhatsAppSwitches | null>): Promise<HelperOutcome | null> {
+  if (!deps.chatInbound) return null;
+  const kept = await deps.chatInbound(message, switches.catch(() => null)).catch(() => null);
+  if (kept?.outcome === "chat" && !kept.duplicate && deps.deliverWaiting) await deps.deliverWaiting(message.from).catch(() => 0);
+  return kept;
+}
+
+export async function runHelperTurn(message: WebhookInbound, deps: HelperDeps = liveHelperDeps()): Promise<HelperOutcome> {
+  const started = deps.now();
+
+  // 1. Something the helper can read, and still fresh. A sticker, a place or
+  //    a message WhatsApp delivered late is not the helper's to answer, but
+  //    may still belong in a chat with a person at school (D-616).
+  const kind: MessageKind = messageKind(message.type, message.raw);
+  const sentAt = Date.parse(message.at);
+  const stale = !Number.isFinite(sentAt) || started.getTime() - sentAt > MAX_MESSAGE_AGE_MINUTES * 60_000;
+  if (kind === "ignore" || stale) {
+    const kept = deps.chatInbound ? await keepInChat(message, deps, Promise.resolve().then(() => deps.readSwitches())) : null;
+    return kept ?? skip(kind === "ignore" ? "not_readable" : "too_old");
+  }
+
+  // 1a. A member of staff answering a hand-off, by swiping on the helper's alert (D-578).
+  if (message.replyTo && deps.staffAnswer) {
+    const answered = await deps.staffAnswer(message).catch(() => null);
+    if (answered) return answered;
+  }
+  // A tap on Mark Leave, Mark Absent or Not now that no alert of ours took
+  // (D-602): a decision for One, never a parent's words.
+  if (readNoteTap(message.raw)) return skip("note_tap_unmatched");
+
+  // 1b. A member of staff linking their WhatsApp with the code One gave them (D-582).
+  if (deps.staffLink) {
+    const linked = await deps.staffLink(message).catch(() => null);
+    if (linked) return linked;
+  }
+
+  // The switches and the helper's settings start now, side by side with the
+  // staff checks (D-607): every message is asked whether staff sent it, and a
+  // parent's should not wait a second round of reads for that. A turn that
+  // ends at the staff step never waits for them, so neither may reject unseen.
+  const switchesRead = Promise.resolve().then(() => deps.readSwitches());
+  const settingsRead = Promise.resolve().then(() => deps.readSettings());
+  switchesRead.catch(() => undefined);
+  settingsRead.catch(() => undefined);
+
+  // 1c. A member of staff, or the owner's number in a role, asking their desk (D-591, D-607).
+  if (deps.staffCommand) {
+    const handled = await deps.staffCommand(message, switchesRead.catch(() => null)).catch(() => null);
+    if (handled) return handled;
+  }
+
+  // 1d. A parent writing in a chat with a person at school (D-616): a swiped
+  //     reply to it, words to an answer that waited for them, or more while
+  //     a person is answering. Kept in the chat for that person. A STOP, an
+  //     empty message and a tap on the helper's own buttons stay the helper's.
+  const tap = kind === "tap" ? readTap(message.raw) : null;
+  if (deps.chatInbound && (kind === "tap" ? tap === null : messageSkip({ kind, text: message.text, tap }) === null)) {
+    const kept = await keepInChat(message, deps, switchesRead);
+    if (kept) return kept;
+  }
+
+  // 2. A number the helper knows.
+  const [switches, settings] = await Promise.all([switchesRead, settingsRead]);
+  if (!settings) return skip("settings_unreadable");
+  const studentIds = practiceIdsFor(message.from, switches?.ownerTestNumber ?? null, settings.practiceStudentIds);
+  if (!studentIds) return skip("unknown_number");
+
+  // 3. The school's number may answer this number now. The parent wrote
+  //    seconds ago, so the 24 hours are open; everything else is the policy's.
+  const config = deps.readConfig();
+  const verdict = checkWhatsAppSend({ feature: "parent_helper", to: message.from, switches, config, kind: "text", wroteInLast24h: true });
+  if (verdict.decision === "dry_run") return skip("practice_mode");
+  if (verdict.decision === "refuse") return skip(verdict.code);
+  if (!deps.claim) return skip("cannot_claim");
+
+  // 3a. Nothing to answer in the message itself (a STOP, an empty message, a
+  //     tap that is not the helper's): left to the hub before anything is
+  //     read or claimed, as before (D-605).
+  const nothing = messageSkip({ kind, text: message.text, tap });
+  if (nothing) return skip(nothing);
+
+  // Step 1 knows only the practice family: the owner's number standing for TEST children.
+  const practice = true;
+  // 4. The family's records, the chat so far and the AI switch start now and
+  //    are read while the hub is asked, so the parent sees the blue ticks and
+  //    the typing dots without waiting for them (D-605). The school's answers
+  //    are waited for only if Claude is asked (D-589). None of these rejects.
+  const knowledge = deps.readKnowledge ? deps.readKnowledge(practice).catch(() => null) : Promise.resolve(null);
+  const reading = Promise.all([
+    deps.readChildFacts(studentIds).catch(() => null),
+    deps.readChat(message.from).catch(() => EMPTY_CHAT),
+    deps.readAiSettings().catch(() => null),
+  ]);
+
+  // 5. Fewer than forty answers today for this number (two hundred for the
+  //    owner's test number, D-607), and the AI budget.
+  const budget = await deps.readBudget(message.from, started).catch(() => null);
+  if (!budget) return skip("budget_unreadable");
+  if (budget.turnsToday >= dailyTurnCap(sameNumber(message.from, switches?.ownerTestNumber ?? null))) return skip("daily_cap");
+
+  // 6. Not answered already, and the hub gives it to One.
+  const ledger = await deps.startTurn({
+    providerMessageId: message.providerMessageId,
+    from: message.from,
+    receivedAt: new Date(sentAt).toISOString(),
+    kind: kind as Exclude<MessageKind, "ignore">,
+    practice,
+  });
+  if (ledger === "duplicate") return skip("duplicate");
+  if (ledger === "failed") return skip("ledger_failed");
+
+  const asked = deps.now().getTime();
+  const stages: TurnStages = { before: started.getTime() - sentAt, checks: asked - started.getTime() };
+  const claim = await deps.claim(message.providerMessageId);
+  const claimedAt = deps.now().getTime();
+  stages.claim = claimedAt - asked;
+  stages.dots = claimedAt - sentAt;
+  if (!claim.ok || !claim.claimed) {
+    const reason = claimRefusal(claim);
+    await deps.finishTurn(message.providerMessageId, { status: "not_claimed", reason, stages });
+    return { outcome: "not_claimed", reason };
+  }
+
+  // One answers from here on, whatever happens: Claude's words, a card or the menu.
+  const [children, chat, ai] = await reading;
+  const readAt = deps.now().getTime();
+  stages.family = readAt - claimedAt;
+  if (!children || children.length === 0) {
+    // The parent is already seeing the dots, so they hear why, rather than nothing.
+    const language = (kind === "text" ? detectLanguage(message.text, chat.language) : null) ?? chat.language ?? "hi";
+    return answerWithoutRecords({ message, deps, sentAt, stages, language, reason: children ? "no_children" : "facts_unreadable" });
+  }
+
+  const family: Family = { children, practice };
+  const aiAvailable = deps.hasClaudeKey() && ai !== null && ai.enabled && budget.spentUsd < ai.monthlyBudgetUsd;
+  // A school visit's days come from the family's own session's calendar (D-592), read only when they may be shown.
+  const visit =
+    needsVisitCalendar({ kind, text: message.text, tap }) && deps.readVisitCalendar
+      ? await deps.readVisitCalendar(children[0].sessionLabel, schoolToday(started)).catch(() => null)
+      : null;
+  const plan = planTurn({ kind, text: message.text, tap, chat, family, helperName: settings.helperName, now: started, aiAvailable, visit });
+  if (plan.action === "skip") {
+    // Only a family with no child skips here, and that was answered above; never leave the dots unanswered.
+    const language = chat.language ?? "hi";
+    return answerWithoutRecords({ message, deps, sentAt, stages, language, reason: `plan_${plan.reason}` });
+  }
+
+  // Answers that waited for this parent to write again go first; a bare "ok" needs nothing more (D-578).
+  const acknowledgement = kind === "text" && isAcknowledgement(message.text);
+  const waitingFrom = deps.now().getTime();
+  const waiting = deps.deliverWaiting ? deps.deliverWaiting(message.from).catch(() => 0) : Promise.resolve(0);
+  if (acknowledgement) {
+    const delivered = await waiting;
+    stages.waiting = deps.now().getTime() - waitingFrom;
+    if (delivered > 0) {
+      const finished = deps.now();
+      await deps.finishTurn(message.providerMessageId, {
+        status: "answered",
+        intent: "answer_delivered",
+        route: "rule",
+        latencyMs: finished.getTime() - sentAt,
+        stages,
+      });
+      await deps.saveChat(message.from, {}, finished).catch(() => undefined);
+      return { outcome: "answered", route: "rule", intent: "answer_delivered", handoff: null };
+    }
+  }
+
+  const firstContact = plan.action === "ask_ai" ? plan.firstContact : false;
+  const context: ReplyContext = { language: plan.language, helperName: settings.helperName, family, firstContact };
+  // Claude's share of the answer and a receipt's PDF are timed where they happen (D-605).
+  const receiptSpan = { from: Number.POSITIVE_INFINITY, to: Number.NEGATIVE_INFINITY };
+  const cardSpan = { from: Number.POSITIVE_INFINITY, to: Number.NEGATIVE_INFINITY };
+  const timed: HelperDeps = {
+    ...deps,
+    askClaude: async (request) => {
+      const from = deps.now().getTime();
+      try {
+        return await deps.askClaude(request);
+      } finally {
+        stages.ai = (stages.ai ?? 0) + (deps.now().getTime() - from);
+      }
+    },
+    // Several receipts' PDFs are made side by side (D-606): their stage is
+    // the span from the first start to the last finish, not the sum.
+    prepareReceipt: deps.prepareReceipt
+      ? async (request) => {
+          const prepare = deps.prepareReceipt;
+          const from = deps.now().getTime();
+          receiptSpan.from = Math.min(receiptSpan.from, from);
+          try {
+            return prepare ? await prepare(request) : null;
+          } finally {
+            receiptSpan.to = Math.max(receiptSpan.to, deps.now().getTime());
+            stages.receipt = receiptSpan.to - receiptSpan.from;
+          }
+        }
+      : undefined,
+    // Report cards the same way (D-613).
+    prepareReportCard: deps.prepareReportCard
+      ? async (request) => {
+          const prepare = deps.prepareReportCard;
+          const from = deps.now().getTime();
+          cardSpan.from = Math.min(cardSpan.from, from);
+          try {
+            return prepare ? await prepare(request) : null;
+          } finally {
+            cardSpan.to = Math.max(cardSpan.to, deps.now().getTime());
+            stages.reportCard = cardSpan.to - cardSpan.from;
+          }
+        }
+      : undefined,
+  };
+  const composing = deps.now().getTime();
+  let composed: Composed;
+  try {
+    composed =
+      plan.action === "rate"
+        ? await composeRating({ message, plan, settings, context, deps: timed, now: started, sentAt })
+        : await compose({ message, plan, settings, family, children, context, deps: timed, now: started, sentAt, knowledge });
+  } catch (caught) {
+    logWarn("whatsapp.helper.compose_crashed", { error: caught instanceof Error ? caught.message : "unknown" });
+    composed = {
+      reply: { message: fallbackReply(context), intent: "fallback", route: "fallback", chat: plan.chat, handoff: null },
+      claude: null,
+      parentReplyId: null,
+      handedTo: null,
+      note: "compose_crashed",
+      followUp: null,
+      lesson: null,
+      fallback: null,
+      more: [],
+    };
+  }
+  const { reply, claude, parentReplyId, handedTo } = composed;
+  let note = composed.note;
+  const composedAt = deps.now().getTime();
+  stages.compose = composedAt - composing;
+
+  // The waiting answers, sent while this one was worked out, go before it.
+  if (!acknowledgement) {
+    await waiting;
+    const waited = deps.now().getTime() - composedAt;
+    if (waited > 0) stages.waiting = waited;
+  }
+
+  const sending = deps.now().getTime();
+  const delivered = await deliver(deps, message.from, { message: reply.message, fallback: composed.fallback });
+  const sent = delivered.sent;
+  note = note ?? delivered.note;
+
+  const finished = deps.now();
+  const latencyMs = finished.getTime() - sentAt;
+  stages.send = finished.getTime() - sending;
+
+  // More receipts or report cards the parent asked for, one after another so
+  // they arrive in order, once the first has gone (D-606, D-613).
+  if (sent.outcome === "accepted" && composed.more.length > 0) {
+    for (const next of composed.more) {
+      const extra = await deliver(deps, message.from, next);
+      note = note ?? (extra.sent.outcome === "accepted" ? extra.note : "receipt_not_sent");
+    }
+    stages.more = deps.now().getTime() - finished.getTime();
+  }
+  const common: TurnFinish = {
+    status: "answered",
+    intent: reply.intent,
+    route: reply.route,
+    model: claude?.model ?? null,
+    costUsd: claude?.costUsd ?? 0,
+    handoff: handedTo,
+    parentReplyId,
+    latencyMs,
+    stages,
+  };
+
+  if (sent.outcome !== "accepted") {
+    const reason = sent.outcome === "unknown" ? `send_unknown:${sent.errorCode}` : `send_rejected:${sent.errorCode ?? sent.httpStatus}`;
+    await deps.finishTurn(message.providerMessageId, { ...common, status: "failed", reason });
+    return { outcome: "failed", reason };
+  }
+
+  // The list learns from an answer that reached the parent: a school answer used, or a question it could not answer (D-589).
+  const lesson = composed.lesson;
+  const lessonId = lesson && deps.noteLesson ? await deps.noteLesson(lesson, family.practice, claude?.answer?.topic ?? null).catch(() => null) : null;
+  await deps.finishTurn(message.providerMessageId, {
+    ...common,
+    reason: note,
+    replyMessageId: sent.messageId,
+    ...(lessonId && lesson ? { lessonId, lessonRole: lesson.role } : {}),
+  });
+  await deps.saveChat(message.from, reply.chat, finished).catch(() => undefined);
+
+  // The parent knows it was passed on; now the person it is for is told (D-578),
+  // or, while chats are on, it waits in the family's chat at that desk with
+  // what the parent sent and what the helper told them (D-616).
+  const forChat = { family: children, said: saidOf(message), ai: { text: readAs(reply.message), wamid: sent.messageId, at: finished.toISOString() } };
+  if (parentReplyId && handedTo && reply.handoff && deps.openHandoff) {
+    const anchor = reply.handoff.child ?? children[0];
+    await deps
+      .openHandoff({
+        parentReplyId,
+        parentE164: message.from,
+        language: plan.language,
+        target: handedTo,
+        topic: reply.handoff.topic,
+        child: reply.handoff.child,
+        sessionLabel: anchor.sessionLabel,
+        fromName: message.fromName ?? "Parent",
+        practice: family.practice,
+        ...forChat,
+        body: reply.handoff.body,
+      })
+      .catch(() => undefined);
+  }
+  // A "no" to an answer: the office is told the same way (D-584).
+  if (composed.followUp && deps.openHandoff) await deps.openHandoff({ ...composed.followUp, ...forChat }).catch(() => undefined);
+  return { outcome: "answered", route: reply.route, intent: reply.intent, handoff: handedTo };
+}
+
+/**
+ * Every message in one webhook delivery, side by side: each has only a few
+ * seconds to be claimed before the hub's bot answers it. A failure in one
+ * never stops another, and nothing about a parent's words reaches the logs.
+ */
+export async function runHelperTurns(messages: readonly WebhookInbound[], deps?: HelperDeps): Promise<HelperOutcome[]> {
+  if (messages.length === 0) return [];
+  const shared = deps ?? liveHelperDeps();
+  return Promise.all(
+    messages.map(async (message) => {
+      try {
+        const outcome = await runHelperTurn(message, shared);
+        if (outcome.outcome === "failed") logWarn("whatsapp.helper.turn_failed", { ...outcome, from: maskNumber(message.from) });
+        else if (outcome.outcome !== "skipped" || outcome.reason !== "unknown_number") {
+          logInfo("whatsapp.helper.turn", { ...outcome, from: maskNumber(message.from) });
+        }
+        return outcome;
+      } catch (caught) {
+        logWarn("whatsapp.helper.turn_crashed", { error: caught instanceof Error ? caught.message : "unknown", from: maskNumber(message.from) });
+        return { outcome: "failed" as const, reason: "crashed" };
+      }
+    }),
+  );
+}

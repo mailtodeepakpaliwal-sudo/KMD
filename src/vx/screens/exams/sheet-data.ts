@@ -1,0 +1,193 @@
+import "server-only";
+
+import { isTestSessionLabel } from "@/platform/auth/test-session-policy";
+import { schoolToday } from "@/platform/dates";
+import { createAdminClient } from "@/platform/supabase/admin";
+import { shortDay } from "@/vx/format";
+import { tellApart } from "@/vx/screens/teach/domain/teach";
+import type { Pair } from "@/vx/text";
+
+import { listExams, marksOf, paperById, previousExam, studentsByIds, toCell, type Exam, type PaperRow } from "./data";
+import type { Cell } from "./domain/entry";
+import { sentItself } from "./domain/sent-itself";
+import { UNDO_MS } from "./save-types";
+
+/*
+ * Everything one marks sheet needs, for whoever has already been allowed to
+ * open it: the paper, its roll in roll order, what is saved, and each child's
+ * mark in the exam before, shown faintly beside the box.
+ */
+
+/** `hint`: SR number and father, only for a child whose name another child on the sheet shares (ST-19). */
+export type SheetStudent = { id: string; name: string; roll: string | null; prev: string | null; prevPct: number | null; hint?: Pair | null };
+
+export type SheetPaper = {
+  id: string;
+  examId: string;
+  examLabel: { en: string; hi: string };
+  classId: string;
+  classLabel: string;
+  subjectCode: string;
+  subjectId: string;
+  maxMarks: number;
+  passMarks: number | null;
+  markStep: number;
+  allowExempt: boolean;
+  entryStatus: "open" | "submitted";
+  entryRevision: number;
+  submittedAt: string | null;
+  submittedBy: string | null;
+  /** Sent to the exam office by itself after the marks due day (D-651), not by a person. */
+  sentItself?: boolean;
+  /** When the sender's ten minutes to undo end (`withdraw_marks_submission`), from the server's `submitted_at`. */
+  undoUntil?: string | null;
+  /** Whether those ten minutes were still running when the page was drawn — the server's clock, not the phone's. */
+  undoOpen?: boolean;
+  /** How long Undo had left when the page was drawn, by the server's clock; the phone counts down from it, so a phone whose clock is off neither loses Undo early nor keeps it late. */
+  undoLeftMs?: number;
+  examOpen: boolean;
+  locked: boolean;
+  dueLabel: string | null;
+  /** The marks due day is over (school time): a fully entered, quiet paper now goes by itself (D-651). */
+  duePassed?: boolean;
+};
+
+export type Sheet = {
+  paper: SheetPaper;
+  students: SheetStudent[];
+  saved: Record<string, Cell>;
+  coordinatorName: string | null;
+};
+
+async function rosterIds(paperId: string): Promise<string[]> {
+  const { data, error } = await createAdminClient().rpc("paper_roster", { p_paper: paperId });
+  if (error) throw new Error(`Could not read who sat the paper: ${error.message}`);
+  return ((data ?? []) as string[]).filter(Boolean);
+}
+
+export function rollOrder(a: SheetStudent, b: SheetStudent): number {
+  const ra = Number(a.roll ?? NaN);
+  const rb = Number(b.roll ?? NaN);
+  if (Number.isFinite(ra) && Number.isFinite(rb) && ra !== rb) return ra - rb;
+  if (Number.isFinite(ra) !== Number.isFinite(rb)) return Number.isFinite(ra) ? -1 : 1;
+  return a.name.localeCompare(b.name);
+}
+
+export async function loadSheet(paperId: string, known?: { exams?: Exam[]; paper?: PaperRow }): Promise<Sheet | null> {
+  const paper = known?.paper ?? (await paperById(paperId));
+  if (!paper) return null;
+  const db = createAdminClient();
+  const { data: exam } = await db
+    .from("assessments")
+    .select("id, session_label, label_en, label_hi, code, status")
+    .eq("id", paper.assessment_id)
+    .maybeSingle<{ id: string; session_label: string; label_en: string; label_hi: string; code: string; status: string }>();
+  if (!exam) return null;
+
+  const exams = known?.exams ?? (await listExams(exam.session_label));
+  const self = exams.find((e) => e.id === exam.id);
+  const before = self ? previousExam(exams, self) : null;
+
+  const [ids, marks, lock, coordinator, prevPaper] = await Promise.all([
+    rosterIds(paper.id),
+    marksOf([paper.id]),
+    db.from("exam_class_locks").select("class_id").eq("assessment_id", paper.assessment_id).eq("class_id", paper.class_id).maybeSingle(),
+    db
+      .from("staff_profiles")
+      .select("display_name")
+      .eq("role", "exam_coordinator")
+      .eq("is_active", true)
+      // The exam's own session's coordinator (owner, 8 Nov 2026): never the
+      // QA test coordinator on a real exam.
+      .eq("is_test_account", isTestSessionLabel(exam.session_label))
+      .order("created_at")
+      .limit(1)
+      .maybeSingle<{ display_name: string }>(),
+    before
+      ? db
+          .from("assessment_subjects")
+          .select("id, max_marks")
+          .eq("assessment_id", before.id)
+          .eq("class_id", paper.class_id)
+          .eq("subject_id", paper.subject_id)
+          .maybeSingle<{ id: string; max_marks: number | string }>()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const [names, rolls, prevMarks] = await Promise.all([
+    studentsByIds(ids),
+    ids.length
+      ? db
+          .from("enrolments")
+          .select("student_id, roll_no")
+          .eq("session_label", exam.session_label)
+          .eq("class_id", paper.class_id)
+          .returns<{ student_id: string; roll_no: string | null }[]>()
+      : Promise.resolve({ data: [] as { student_id: string; roll_no: string | null }[] }),
+    prevPaper.data ? marksOf([prevPaper.data.id]) : Promise.resolve([]),
+  ]);
+
+  const rollOf = new Map((rolls.data ?? []).map((r) => [r.student_id, r.roll_no]));
+  const prevMax = prevPaper.data ? Number(prevPaper.data.max_marks) : 0;
+  const prevOf = new Map(prevMarks.map((m) => [m.student_id, m]));
+  const students: SheetStudent[] = ids
+    .map((id) => {
+      const pm = prevOf.get(id);
+      const prevValue = pm && pm.value !== null && !pm.absent ? Number(pm.value) : null;
+      return {
+        id,
+        name: names.get(id)?.name ?? "—",
+        roll: rollOf.get(id) ?? null,
+        prev: before && pm ? `${before.code}: ${pm.absent ? "AB" : pm.exempt ? "EX" : `${prevValue ?? "—"}/${prevMax}`}` : null,
+        prevPct: prevValue !== null && prevMax > 0 ? Math.round((prevValue / prevMax) * 100) : null,
+      };
+    })
+    .sort(rollOrder);
+  const apart = tellApart(students.map((s) => ({ id: s.id, name: s.name, admissionNo: names.get(s.id)?.admissionNo ?? null, fatherName: names.get(s.id)?.fatherName ?? null })));
+  for (const s of students) s.hint = apart.get(s.id) ?? null;
+
+  const markOf = new Map(marks.map((m) => [m.student_id, m]));
+  const saved: Record<string, Cell> = {};
+  for (const s of students) saved[s.id] = toCell(markOf.get(s.id));
+
+  const due = self?.plan?.marksDueOn ?? null;
+  const undoUntil = paper.entry_status === "submitted" && paper.submitted_at ? new Date(new Date(paper.submitted_at).getTime() + UNDO_MS).toISOString() : null;
+  return {
+    paper: {
+      id: paper.id,
+      examId: paper.assessment_id,
+      examLabel: { en: exam.label_en, hi: exam.label_hi },
+      classId: paper.class_id,
+      classLabel: paper.class_label,
+      subjectCode: paper.subject_code,
+      subjectId: paper.subject_id,
+      maxMarks: Number(paper.max_marks),
+      passMarks: paper.pass_marks === null ? null : Number(paper.pass_marks),
+      markStep: Number(paper.mark_step),
+      allowExempt: paper.allow_exempt,
+      entryStatus: paper.entry_status,
+      entryRevision: paper.entry_revision,
+      submittedAt: paper.submitted_at,
+      submittedBy: paper.submitted_by,
+      sentItself: sentItself(paper),
+      undoUntil,
+      undoOpen: undoUntil !== null && Date.now() < new Date(undoUntil).getTime(),
+      undoLeftMs: undoUntil !== null ? Math.max(0, new Date(undoUntil).getTime() - Date.now()) : 0,
+      examOpen: exam.status === "open",
+      locked: Boolean(lock.data),
+      dueLabel: due ? shortDay(due) : null,
+      duePassed: due !== null && due < schoolToday(),
+    },
+    students,
+    saved,
+    coordinatorName: coordinator.data?.display_name ?? null,
+  };
+}
+
+/** Days left until marks are due, for the banner; negative once overdue. */
+export function daysLeft(due: string | null, today = schoolToday()): number | null {
+  if (!due) return null;
+  const a = Date.UTC(+today.slice(0, 4), +today.slice(5, 7) - 1, +today.slice(8, 10));
+  const b = Date.UTC(+due.slice(0, 4), +due.slice(5, 7) - 1, +due.slice(8, 10));
+  return Math.round((b - a) / 86_400_000);
+}

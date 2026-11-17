@@ -1,0 +1,531 @@
+import { Suspense } from "react";
+
+import { PageHeader } from "@/ui/shell/page-header";
+import { SectionCard } from "@/ui/shell/section-card";
+import { CollapsibleSection } from "@/ui/primitives/collapsible-section";
+import { OfficeNotice } from "@/ui/office/office-ui";
+import { RemindersWorkspace } from "@/modules/whatsapp/ui/reminders-workspace";
+import { DueTodayCard } from "@/modules/whatsapp/ui/due-today-card";
+import { HoldoutControl } from "@/modules/whatsapp/ui/holdout-control";
+import { CollectionListLinks } from "@/modules/whatsapp/ui/collection-list-links";
+import { campaignsDueOn, messageDateFor } from "@/modules/whatsapp/domain/campaign-schedule";
+import { savedCampaignHref } from "@/modules/whatsapp/domain/campaign-links";
+import {
+  buildInstallmentCalendar,
+  describeDateGuard,
+  type InstallmentCalendar,
+} from "@/modules/whatsapp/domain/installment-calendar";
+import { TestSendPanel } from "@/modules/whatsapp/ui/test-send-panel";
+import { createAdminClient } from "@/modules/fees/platform/supabase/admin";
+import { hasStaffPermission, requireAnyStaffPermission } from "@/modules/fees/platform/session";
+import { isParentWhatsAppConfigured } from "@/modules/whatsapp/data/parent-send";
+import { oneMessagePerFamilyEnabled } from "@/modules/whatsapp/data/reminder-settings";
+import { toWorkspaceCandidate } from "@/modules/whatsapp/ui/workspace-candidate";
+import { MessageBlock } from "@/modules/whatsapp/ui/message-block";
+import { ESCALATE_TO_SECOND_NUMBER_AFTER } from "@/modules/whatsapp/domain/family-grouping";
+import {
+  istToday,
+  loadReminderAudience,
+  type ReminderFilters,
+} from "@/modules/whatsapp/domain/fee-reminders";
+import { resolveReminderSessionLabel } from "@/modules/whatsapp/data/reminder-session";
+import {
+  installmentPhrase,
+  isLedgerQuotedSituation,
+  noticeValuesFrom,
+} from "@/modules/whatsapp/domain/campaigns";
+import { reminderQuery } from "@/modules/whatsapp/domain/audience";
+import { AudienceBuilder } from "@/modules/whatsapp/ui/audience-builder";
+import { CarriedFilterFields } from "@/modules/whatsapp/ui/carried-filter-fields";
+import { NoticePicker } from "@/modules/whatsapp/ui/notice-picker";
+import {
+  loadStudentBriefs,
+  searchSessionStudents,
+  type StudentBrief,
+} from "@/modules/whatsapp/data/student-lookup";
+import {
+  addReminderStudentAction,
+  applyNoticeSettingsAction,
+} from "@/app/(app)/fees/reminders/actions";
+import { renderNoticePreview } from "@/modules/whatsapp/domain/campaign-bodies";
+import {
+  activeCampaignNameOrNull,
+  approvedV6Campaign,
+  fillBody,
+  V6_BUTTON_LABELS,
+} from "@/modules/whatsapp/domain/campaign-bodies-v6";
+import { openingNoticeValues } from "@/modules/whatsapp/domain/test-send-values";
+import {
+  listCampaigns,
+  loadRanScheduleSlots,
+  type SavedCampaign,
+} from "@/modules/whatsapp/data/campaign-store";
+import { describeLateFeeDrift } from "@/modules/whatsapp/domain/late-fee";
+import { UTILITY_MESSAGE_COST_INR } from "@/modules/whatsapp/domain/message-cost";
+import {
+  EveryoneMessagedNotice,
+  LeftOutSummary,
+  PausedPanel,
+  UnreachablePanel,
+} from "@/modules/whatsapp/ui/audience-panels";
+import { NoticePreview } from "@/modules/whatsapp/ui/notice-preview";
+import { RemindersNav } from "@/modules/whatsapp/ui/reminders-nav";
+import { FixNudge } from "@/modules/whatsapp/ui/fix-nudge";
+import { TodayStrip } from "@/modules/whatsapp/ui/today-strip";
+import { suggestionsForToday } from "@/modules/whatsapp/domain/today-suggestions";
+import { readerFor, resolveReminderContext } from "@/modules/whatsapp/data/reminder-context";
+import { isoFromDdMmYyyy } from "@/platform/helpers/date";
+
+// The list is only ever as good as the ledger it was read from, and staff will
+// send money-bearing messages off it. Never serve it from a cache.
+export const revalidate = 0;
+
+// A run of a few hundred families is one request: rebuild the audience, call
+// WhatsApp in batches, then log. Well inside this, but the default ceiling is
+// not something to discover halfway through a send — a request cut off after
+// the provider calls leaves parents messaged and the office told nothing.
+export const maxDuration = 300;
+
+type PageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+/**
+ * One value out of the query string, or null when it is absent.
+ *
+ * `readerFor` from `data/reminder-context`, not a local copy: a repeated key
+ * has to join with a comma rather than take the first value, because the
+ * installment control is four checkboxes sharing one name. A second copy of
+ * that rule here is how this screen and the collection lists would name
+ * different families again.
+ */
+const reader = readerFor;
+
+export default async function WhatsappRemindersPage({ searchParams }: PageProps) {
+  const staff = await requireAnyStaffPermission(["settings:view", "settings:write"], {
+    onDenied: "redirect",
+  });
+  const canSend = hasStaffPermission(staff, "settings:write");
+
+  const params = (await searchParams) ?? {};
+  const supabase = createAdminClient();
+
+  let sessionLabel: string;
+  let ledgerLateFee = 0;
+  let calendar: InstallmentCalendar = buildInstallmentCalendar({
+    schedule: [],
+    today: istToday(),
+  });
+  let savedCampaigns: SavedCampaign[] = [];
+  let ranSlots = new Map<string, string[]>();
+  let audience: Awaited<ReturnType<typeof loadReminderAudience>>;
+  let filters: ReminderFilters;
+  let loadError: string | null = null;
+  // Started the moment the filters are known and awaited below, so the
+  // hand-picked names, a search and the grouping switch load alongside the
+  // saved campaigns instead of after them.
+  let extras: Promise<[StudentBrief[], StudentBrief[], boolean]> = Promise.resolve([[], [], true]);
+  const findQuery = reader(params)("find")?.trim() ?? "";
+
+  try {
+    sessionLabel = await resolveReminderSessionLabel(supabase);
+    // The drain, the policy read, the window-before-calendar parse and the
+    // filter parse all live in `resolveReminderContext` now, because the
+    // collection-lists screen and its export have to derive the SAME audience
+    // from the SAME query string. Two copies of this is how a teacher's sheet
+    // ends up naming families this screen never showed.
+    const context = await resolveReminderContext(supabase, sessionLabel, reader(params));
+    ledgerLateFee = context.ledgerLateFee;
+    calendar = context.calendar;
+    filters = context.filters;
+    audience = context.audience;
+    const pickedIds = [...filters.includeStudentIds, ...filters.excludeStudentIds];
+    extras = Promise.all([
+      loadStudentBriefs(supabase, sessionLabel, pickedIds).catch(() => []),
+      findQuery
+        ? searchSessionStudents(supabase, sessionLabel, findQuery).catch(() => [])
+        : Promise.resolve([]),
+      // The run's own grouping switch, so the counts on screen are what is billed.
+      oneMessagePerFamilyEnabled(supabase),
+    ]);
+    [savedCampaigns, ranSlots] = await Promise.all([
+      // Cheap, and it lets the header say how many are saved without a second page.
+      listCampaigns(supabase, sessionLabel).catch(() => []),
+      // Which scheduled slots have already gone out, so a campaign that ran this
+      // morning is not offered again this afternoon. Best-effort: a due-card that
+      // cannot be built must not take the send screen down with it.
+      loadRanScheduleSlots(supabase, sessionLabel).catch(() => new Map<string, string[]>()),
+    ]);
+  } catch (caught) {
+    loadError = caught instanceof Error ? caught.message : "Could not build the recipient list.";
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          eyebrow="Reminders"
+          title="WhatsApp fee reminders"
+          description="Pick families off the live dues list and send them the approved reminder."
+        />
+        <OfficeNotice title="Could not load the list" tone="danger">
+          {loadError}
+        </OfficeNotice>
+      </div>
+    );
+  }
+
+  const today = istToday();
+  // Not a filter — it changes nobody's eligibility — so it rides alongside
+  // rather than going through parseReminderFilters. It exists only so the run
+  // record can say which saved campaign produced it.
+  const campaignId = reader(params)("campaignId");
+  const activeCampaign = campaignId
+    ? savedCampaigns.find((entry) => entry.id === campaignId) ?? null
+    : null;
+  // `campaignNameFor`, not `campaignFor`: this page must RENDER a notice
+  // awaiting Meta approval — disabled chip, audience count, held-back list — and
+  // `campaignFor` throws for one. A hand-edited `?situation=upcoming` would
+  // otherwise blank the whole screen, which is the failure
+  // `parseReminderFilters` falls back rather than throws to avoid.
+  const campaignName = activeCampaignNameOrNull(filters.situation, filters.language) ?? "";
+  const providerReady = isParentWhatsAppConfigured();
+  const pickedIso = isoFromDdMmYyyy(filters.lastDate);
+  // No prevyear exception any more: v2 gave that notice a settle-by date too.
+  // `describeDateGuard`, not a bare comparison: the rule is per notice.
+  // `late_fee_applied` prints no date at all — its subject IS that a date has
+  // gone — so a raw `pickedIso < today` would grey out the send button on the
+  // one notice that fits the situation.
+  const dateHasPassed = Boolean(
+    describeDateGuard({
+      situation: filters.situation,
+      lastDateIso: pickedIso,
+      lastDateLabel: filters.lastDate,
+      today,
+    }),
+  );
+  // Warn, never block: the office may deliberately quote a late fee the ledger
+  // will not charge — that is what the control is for — but not by accident.
+  const lateFeeWarning = describeLateFeeDrift({
+    amount: filters.lateFeeAmount,
+    basis: filters.lateFeeBasis,
+    ledgerAmount: ledgerLateFee,
+    isCarryForward: filters.situation === "prevyear",
+    // Until 2026-09-10 these three could only quote the ledger, so there was
+    // nothing to drift from. They can be put in custom mode now, and that is
+    // the one place a typed figure stops being a lever and becomes a claim
+    // about the account — `describeLateFeeDrift` says so in its own words.
+    isLedgerQuoted: isLedgerQuotedSituation(filters.situation),
+    source: filters.lateFeeSource,
+    statesAccountBalance: isLedgerQuotedSituation(filters.situation),
+  });
+  /**
+   * The message the top family on the list would receive, rendered here rather
+   * than in the browser — the bodies live in `domain/campaign-bodies`, which
+   * the client bundle never reaches.
+   *
+   * Rendered for an unapproved notice too: the office needs to read what is
+   * awaiting Meta. Same descriptor and same builder as the send path, so the
+   * preview and the message cannot quote different values. Null only when the
+   * list is empty or nothing is registered for a hand-edited `?situation=`.
+   */
+  const previewSample = audience.candidates[0] ?? null;
+  // The `_v6` template once it is the live one — the preview must show what
+  // will actually go, buttons included.
+  const v6 = approvedV6Campaign(filters.situation, filters.language);
+  const previewBody = previewSample
+    ? v6
+      ? fillBody(v6.body, v6.buildParams(noticeValuesFrom(previewSample, filters)))
+      : renderNoticePreview(
+          filters.situation,
+          filters.language,
+          noticeValuesFrom(previewSample, filters),
+        )
+    : null;
+  const previewButtons = v6
+    ? v6.buttons.map((button) => ({
+        label: V6_BUTTON_LABELS[filters.language][button],
+        kind: button === "pay_url" ? ("url" as const) : ("phone" as const),
+      }))
+    : [{ label: "Call office", kind: "phone" as const }];
+  // The test panel's opening preview, from the SAME values its fields open on.
+  const testPreview = renderNoticePreview(
+    filters.situation,
+    filters.language,
+    openingNoticeValues(filters, previewSample),
+  );
+
+  /**
+   * The scheduled slots that have arrived and not gone out.
+   *
+   * Computed here rather than in the card because it is a pure read over data
+   * this page already holds, and the card is a server component with no state —
+   * keeping the arithmetic out of the client bundle on a route with a ceiling.
+   */
+  const dueCampaigns = campaignsDueOn(
+    savedCampaigns.map((campaign) => ({
+      id: campaign.id,
+      name: campaign.name,
+      situation: campaign.situation,
+      language: campaign.language,
+      schedule: campaign.schedule,
+      ranForSlots: ranSlots.get(campaign.id) ?? [],
+    })),
+    calendar,
+    today,
+  );
+
+  /**
+   * The students the office named by hand, and any search that did not resolve
+   * to exactly one person.
+   *
+   * Resolved here rather than in the builder so the whole audience panel stays
+   * a pure render: one page, one set of reads. Best-effort throughout — a
+   * lookup that fails must not take a send screen down, it just shows fewer
+   * chips.
+   */
+  const [handPicked, matches, onePerPhone] = await extras;
+  const briefById = new Map(handPicked.map((brief) => [brief.studentId, brief]));
+  const includedBriefs = filters.includeStudentIds
+    .map((id) => briefById.get(id))
+    .filter((brief): brief is NonNullable<typeof brief> => Boolean(brief));
+  const excludedBriefs = filters.excludeStudentIds
+    .map((id) => briefById.get(id))
+    .filter((brief): brief is NonNullable<typeof brief> => Boolean(brief));
+
+  /**
+   * One sentence saying who is on the list, composed from the FILTERS.
+   *
+   * It used to be `SITUATION_RULE[situation]` — one line per notice, describing
+   * the audience that notice defined for itself. The notice does not define one
+   * any more, so a fixed sentence per notice would now be a description of
+   * something that is not happening.
+   */
+  /**
+   * There is no `audienceRule` here any more.
+   *
+   * It was a second description of the same list — a comma-joined rule string
+   * rendered under "Who is on this list" beside the families, while the
+   * audience panel rendered its own summary. Two hand-rolled sentences over
+   * one filter set, each able to drift from the other and from the engine.
+   * `describeAudience` in `domain/audience.ts` is now the only one, and the
+   * panel that owns the tiles is the only place it appears.
+   */
+
+  /** What the amount on each row is — derived from the tiles, never chosen. */
+  const amountNote = !filters.lastYear
+    ? `The amount on each card is the fees still pending on ${installmentPhrase(filters.installments, "en").toLowerCase()} — the figure the message will quote.`
+    : filters.installments.length > 0
+      ? `The amount on each card is the fees still pending on ${installmentPhrase(filters.installments, "en").toLowerCase()} plus what is left of last session's balance — the figure the message will quote.`
+      : "The amount on each card is what is left of last session's balance — the figure the message will quote.";
+
+  /**
+   * `?…&exclude=` with a trailing separator, so a row's Remove link is this
+   * plus the student id.
+   *
+   * Built by appending the key rather than through `reminderQuery`, because
+   * that collapses an empty value to an absent key — and
+   * `[...[], ""].join(",")` IS empty. So with nothing excluded yet, which is
+   * the normal case, the prefix ended at `quote=ledger_fees` and the row link
+   * became `quote=ledger_feesf9c15390-…`: the Remove button silently corrupted
+   * the quote basis and excluded nobody. Caught by reading the rendered
+   * accessibility tree on production; every earlier check had hand-built
+   * `?exclude=<id>`, which exercised the PARSE and never the link.
+   */
+  const excludeHrefPrefix = `?${reminderQuery(filters, { exclude: null }).toString()}&exclude=${
+    filters.excludeStudentIds.length > 0 ? `${filters.excludeStudentIds.join(",")},` : ""
+  }`;
+
+  // What the fee calendar says is worth sending this morning — see
+  // `domain/today-suggestions`. Read off the same calendar as the tiles.
+  const todaySuggestions = suggestionsForToday(calendar, today, filters.preDueWindowDays);
+  // The notices the calendar would pick today, starred on the picker.
+  const suggestedSituations = [...new Set(todaySuggestions.map((entry) => entry.situation))];
+
+  const familyCount = audience.candidates.length;
+  const familyLabel = `${familyCount} famil${familyCount === 1 ? "y" : "ies"}`;
+
+  return (
+    // flex, not space-y: `order-*` needs a flex container, and space-y also puts
+    // margins around `display:none` children, leaving a visible band where a
+    // desktop-only notice used to be.
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        eyebrow="Reminders"
+        title="WhatsApp fee reminders"
+        description="Pick families off the live dues list and send them the approved reminder. Nothing sends on its own."
+        // The section description below is `hidden md:block`, so without this the
+        // phone never learns which session or how many families it is looking at.
+        mobileEyebrow={`Session ${sessionLabel} · ${familyLabel}`}
+        // Saved campaigns live under the History tab; a second button to the
+        // same page was one more thing to read before the first tap.
+      />
+      <RemindersNav active="send" />
+
+      {/* Reminders that did not reach families since yesterday. Server-only and
+          streamed: no client JavaScript, and the list never waits for it. */}
+      <Suspense fallback={null}>
+        <FixNudge sessionLabel={sessionLabel} />
+      </Suspense>
+
+      {/* Phone: straight after the tabs — the first thing worth knowing in the
+          morning. No `order` class at md and up, so the desk keeps source order. */}
+      <div className="max-md:order-0">
+        <TodayStrip
+          suggestions={todaySuggestions}
+          base={filters}
+          tileCounts={audience.tileCounts.byInstallment}
+          dueCampaigns={dueCampaigns.length}
+        />
+      </div>
+
+      {/* Phone order: the two blocking warnings, then the list, then the test
+          panel, then the advisory warning, then the standing explanation. On
+          `md:` and up no order class applies, so the desk keeps source order. */}
+      {!providerReady ? (
+        <OfficeNotice title="Sending is not configured" tone="warning" className="max-md:order-1">
+          The school’s WhatsApp is not connected on this server yet. The list below is live, but Send will refuse.
+        </OfficeNotice>
+      ) : null}
+
+      {dateHasPassed ? (
+        <OfficeNotice title="That date has already passed" tone="danger" className="max-md:order-1">
+          This notice would tell parents to pay by <strong>{filters.lastDate}</strong>, and today is{" "}
+          {today}. Pick a date they can still meet — the field sits with the notice picker. Sending
+          is blocked until then.
+        </OfficeNotice>
+      ) : null}
+
+      <SectionCard
+        title="Build the message"
+        description={`Session ${sessionLabel}. ${familyLabel} on the list right now.`}
+        className="max-md:order-4"
+      >
+        {/* Above the list on every viewport: a slot that has arrived is the
+          first thing the office needs to know, and on a phone anything below
+          the card list is 40 screens down. */}
+      <DueTodayCard
+        due={dueCampaigns}
+        hrefFor={(campaign) => {
+          // The campaign's whole rule, not just its wording — and the date its
+          // schedule says the message should print today.
+          const saved = savedCampaigns.find((entry) => entry.id === campaign.id);
+          return saved
+            ? savedCampaignHref(saved, messageDateFor(campaign.schedule, calendar, campaign.scheduledFor))
+            : `/fees/reminders?campaignId=${campaign.id}&situation=${campaign.situation}&language=${campaign.language}`;
+        }}
+      />
+
+      <RemindersWorkspace
+          // Only the fields the client half shows — see `WorkspaceCandidate`.
+          candidates={audience.candidates.map(toWorkspaceCandidate)}
+          canSend={canSend && providerReady && !dateHasPassed}
+          campaignName={campaignName}
+          messageCost={UTILITY_MESSAGE_COST_INR}
+          onePerPhone={onePerPhone}
+          secondNumberAfter={ESCALATE_TO_SECOND_NUMBER_AFTER}
+          everyoneMessagedNotice={
+            <EveryoneMessagedNotice audience={audience} campaignName={campaignName} />
+          }
+          leftOutSummary={<LeftOutSummary audience={audience} />}
+          pausedPanel={<PausedPanel audience={audience} canSend={canSend} />}
+          unreachablePanel={<UnreachablePanel audience={audience} />}
+          holdoutControl={<HoldoutControl />}
+          listActions={<CollectionListLinks filters={filters} />}
+          amountNote={amountNote}
+          excludeHrefPrefix={excludeHrefPrefix}
+          savedCampaign={activeCampaign ? { id: activeCampaign.id, name: activeCampaign.name } : null}
+          messageBlock={
+            <MessageBlock
+              savedCampaignName={activeCampaign?.name ?? null}
+              noticeControls={
+                <NoticePicker
+                  filters={filters}
+                  noticeGaps={audience.noticeGaps}
+                  candidateCount={audience.candidates.length}
+                  dateFieldId="lastDate"
+                  today={today}
+                  lateFeeWarning={lateFeeWarning}
+                  applyAction={applyNoticeSettingsAction}
+                  suggested={suggestedSituations}
+                />
+              }
+              preview={
+                previewSample && previewBody ? (
+                  <NoticePreview
+                    recipient={previewSample.parentName}
+                    body={previewBody}
+                    buttons={previewButtons}
+                    footnote="A copy of the approved template, for checking only — WhatsApp sends exactly what Meta approved. Each family sees their own figures."
+                  />
+                ) : null
+              }
+            />
+          }
+          audienceControls={
+            <AudienceBuilder
+              filters={filters}
+              audience={audience}
+              included={includedBriefs}
+              excluded={excludedBriefs}
+              matches={matches}
+              searchQuery={findQuery}
+              // The SAME calendar the audience was counted with, so a tile's
+              // label describes the state its count was built on.
+              calendar={calendar}
+              addAction={addReminderStudentAction}
+              onePerPhone={onePerPhone}
+            />
+          }
+          sendFormFields={<CarriedFilterFields filters={filters} />}
+        />
+      </SectionCard>
+
+      <CollapsibleSection
+        title="Send yourself a test"
+        description="One message to a number you control, using values you can edit. Never recorded against a family."
+        // Above the list on a phone. Below it, the panel landed 42 screens down
+        // past 170 cards — present, and effectively unreachable. Collapsed, it
+        // costs one row here. The desk keeps source order: no `order` applies
+        // at md and up, so it stays below the table where there is room.
+        className="max-md:order-3"
+      >
+        <TestSendPanel
+          // Remount when the screen's notice changes, so the panel's own picker
+          // follows it rather than keeping yesterday's choice in client state.
+          key={`${filters.situation}-${filters.language}`}
+          // No date guard here: testing a template whose date has slipped, on a
+          // staff phone, is exactly when you need to.
+          canTest={canSend && providerReady}
+          situation={filters.situation}
+          language={filters.language}
+          lastDate={filters.lastDate}
+          sample={audience.candidates[0] ?? null}
+          // The raw settings, not composed phrases: the panel runs the SAME
+          // `noticeValuesFrom` projection the send does, so its opening values
+          // are exactly what the top family would be sent.
+          installments={filters.installments}
+          lastYear={filters.lastYear}
+          lateFeeAmount={filters.lateFeeAmount}
+          lateFeeBasis={filters.lateFeeBasis}
+          // Without these the panel composed slot 7 from the TYPED amount
+          // whatever mode the run was in — so a test of an Actual-mode fee-due
+          // notice posted ₹4,000 while the run itself would send the ledger's
+          // ₹1,000. It read correctly on the waiver notices only because those
+          // default to ledger, which is what hid it.
+          lateFeeSource={filters.lateFeeSource}
+          policyLateFeeAmount={filters.policyLateFeeAmount}
+          initialPreview={testPreview}
+        />
+      </CollapsibleSection>
+
+      {/* Four paragraphs of standing explanation is a desk read. The phone gets
+          the one line that changes a decision, from the note above the list. */}
+      <div className="hidden md:block">
+        <OfficeNotice title="How this list works" tone="info">
+          The list is rebuilt from the ledger every time this page loads, so a family who paid is
+          simply gone from it — there is nothing to un-tick. Sending is manual: tick the families
+          you mean, press Send, and each one gets the message once. A family already messaged today
+          is marked and cannot be sent to again until tomorrow.
+        </OfficeNotice>
+      </div>
+    </div>
+  );
+}

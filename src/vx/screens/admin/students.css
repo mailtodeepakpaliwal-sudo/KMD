@@ -1,0 +1,123 @@
+/*
+ * Students (D01 desk table, F05 phone cards). Numbers are the design's
+ * (Desktop.dc.html, App.dc.html "students"). Scoped to `.stu`.
+ */
+
+.stu-wrap{padding:22px 28px 40px;display:flex;flex-direction:column;gap:16px;min-width:0}
+
+/* desk toolbar */
+.stu-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.stu-dsearch{position:relative;height:42px;width:340px;max-width:100%;border-radius:12px;background:var(--card);border:1px solid var(--bds);display:flex;align-items:center;gap:8px;padding:0 12px;color:var(--mut);margin:0}
+.stu-dsearch input,.stu-msearch input{flex:1;min-width:0;border:0;outline:none;background:transparent;color:var(--fg);font:inherit}
+.stu-dsearch input{height:38px;font-size:14px}
+.stu-dsearch input::placeholder,.stu-msearch input::placeholder{color:var(--sub)}
+.stu-dsearch:focus-within,.stu-msearch:focus-within{border-color:var(--acc);box-shadow:0 0 0 3px var(--accs)}
+.stu-dsearch input:focus-visible,.stu-msearch input:focus-visible{outline:none}
+
+/* desk table */
+.stu-card{overflow:hidden;overflow:clip}
+.stu-scroll{overflow-x:auto}
+.stu-head{display:grid;align-items:center;height:46px;padding:0 12px;border-bottom:1px solid var(--bd);background:var(--s2)}
+/*
+ * On a desk the column names stay in view under the 64px top bar while a long
+ * class scrolls past. That needs no scrolling box between the header and the page,
+ * so the table clips instead of scrolling sideways. The desk table shows only from
+ * 900px of page, and there its 780px of columns plus 80px of padding always fit:
+ * container queries measure the page in its own CSS pixels, so large text's zoom is
+ * already counted (measured live from 1000 to 1450 wide, large text off and on:
+ * nothing clipped, nothing needed to scroll). Add a column and that sum must still
+ * fit 900px. This was 1,100px until 7 Nov, which let the header scroll away on a
+ * 1280 screen beside the full side menu, the width of a 1080p laptop at 150%.
+ */
+@container vx (min-width:900px){
+  .vx .stu-scroll{overflow-x:clip}
+  .vx .stu-head{position:sticky;top:64px;z-index:3}
+}
+.stu-th{display:flex;min-width:0}
+.stu-thl{padding:0 8px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mut);line-height:1.15}
+.stu-sort{height:32px;padding:0 8px;border:0;border-radius:8px;background:transparent;color:var(--mut);font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;display:inline-flex;align-items:center;gap:4px;line-height:1.15;text-align:left}
+.stu-sort[data-on]{color:var(--fg)}
+.stu-sort:hover{background:var(--s3)}
+.stu-row{display:grid;align-items:center;min-height:62px;padding:0 12px;border-top:1px solid var(--bd);transition:background-color .18s ease;animation:xFade .18s ease both;cursor:pointer}
+.stu-row:hover{background:var(--s2)}
+.stu-row.sel{background:var(--accs)}
+.stu-td{padding:0 8px;font-size:13px;min-width:0}
+.stu-name{display:flex;align-items:center;gap:12px;padding:6px 8px;border-radius:12px;min-width:0}
+.stu-ava{flex:none;width:38px;height:38px;border-radius:19px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+.stu-link{display:flex;min-width:0;color:var(--fg)}
+.stu-link:hover span{text-decoration:underline;text-underline-offset:2px}
+.stu-bar{display:block;height:6px;transform-origin:left;animation:xGrowX .7s var(--ease) both;transition:width .5s var(--ease)}
+.stu-ra{display:flex;justify-content:flex-end;gap:4px;opacity:.35;transition:opacity .18s ease}
+.stu-row:hover .stu-ra,.stu-row.sel .stu-ra,.stu-ra:focus-within{opacity:1}
+.stu .stu-ib{width:36px;height:36px;padding:0}
+.stu-empty{padding:40px;text-align:center;color:var(--mut)}
+
+/* the tick box */
+.stu-tick{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--bds);background:var(--card);color:var(--prifg);display:flex;align-items:center;justify-content:center;padding:0}
+.stu-tick[data-on]{border:0;background:var(--pri)}
+
+/* foot of the list */
+.stu-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.stu-pager{display:flex;align-items:center;gap:10px}
+
+/* floating bulk bar */
+.stu-bulkwrap{position:fixed;left:0;right:0;bottom:24px;z-index:25;display:flex;justify-content:center;pointer-events:none}
+.stu-bulk{pointer-events:auto;display:flex;align-items:center;gap:6px;padding:8px 8px 8px 18px;border-radius:16px;background:var(--tbg);color:var(--tfg);box-shadow:var(--shl);animation:xToast .32s var(--spring) both}
+
+/* phone header and cards */
+.stu-mhead{position:sticky;top:0;z-index:5;padding:14px 18px 10px;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--bd)}
+.stu-msearch{position:relative;height:48px;border-radius:24px;background:var(--card);border:1px solid var(--bds);display:flex;align-items:center;gap:10px;padding:0 16px;color:var(--mut);margin:0}
+.stu-msearch input{height:44px;font-size:16px}
+.stu-mchips{display:flex;gap:8px;margin:0 -18px;padding:0 18px 2px}
+.stu-cards{display:flex;flex-direction:column;gap:10px}
+.stu-swipe{display:flex;border-radius:20px;scroll-snap-type:x mandatory}
+.stu-mcard{flex:none;width:100%;display:flex;align-items:center;gap:12px;padding:12px 14px;text-align:left;color:var(--fg);box-shadow:none;scroll-snap-align:start;border-radius:20px}
+.stu-acts{flex:none;display:flex;gap:6px;padding-left:8px;scroll-snap-align:end}
+.stu-acts>a{width:62px;border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:11px;font-weight:700}
+
+/* phone: search beside the Filter button (UI-94) */
+.stu-mfind{display:flex;align-items:center;gap:8px}
+.stu-mfind .stu-msearch{flex:1;min-width:0}
+.stu-fbtn{position:relative;flex:none;width:48px;height:48px;border-radius:24px;border:1px solid var(--bds);background:var(--card);color:var(--fg);display:inline-flex;align-items:center;justify-content:center;padding:0}
+.stu-fbtn[data-on]{background:var(--pri);border-color:var(--pri);color:var(--prifg)}
+.stu-fcount{position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--fg);color:var(--bg);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg)}
+
+/* the Filter sheet (portalled into the layer, outside `.stu`) */
+.stu-fsheet{display:flex;flex-direction:column;gap:18px}
+.stu-fsheet section{display:flex;flex-direction:column;gap:8px}
+.stu-fcls{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px}
+.stu-fcls>button{height:42px;padding:0 4px;border-radius:12px;border:1px solid var(--bd);background:var(--card);color:var(--fg);font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stu-fcls>button.on{background:var(--pri);border-color:var(--pri);color:var(--prifg)}
+.stu-fcls>.stu-fall{grid-column:span 2}
+.stu-fchips{display:flex;flex-wrap:wrap;gap:8px}
+.stu-fchips .chip{min-height:40px}
+.stu-fnote{font-size:12.5px;line-height:1.45;color:var(--mut)}
+
+/* phone: compact lines and By class */
+.stu-clist{padding:0;overflow:hidden;border-radius:18px}
+.stu-cline{border-radius:0;border-top:1px solid var(--bd);animation:xFade .18s ease both}
+.stu-swipe.rise{animation-name:xFade;animation-duration:.18s}
+.stu-cline:first-child{border-top:0}
+.stu-crow{flex:none;width:100%;min-height:50px;display:flex;align-items:center;gap:10px;padding:8px 14px;color:var(--fg);background:var(--card);scroll-snap-align:start}
+.stu-cmeta{flex:none;max-width:38%;font-size:12px;color:var(--mut)}
+.stu-cmoney{flex:none;min-width:64px;text-align:right;font-size:13.5px}
+.stu-cline .stu-acts{padding:6px 6px 6px 8px;background:var(--s2)}
+.stu-cline .stu-acts>a{width:56px;border-radius:14px}
+.stu-group{display:flex;flex-direction:column;gap:8px}
+.stu-group+.stu-group{margin-top:8px}
+.stu-ghead{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:0 4px}
+
+@container vx (max-width:899px){
+  .stu-wrap{padding:12px 18px 24px;gap:10px}
+}
+@media (prefers-reduced-motion:reduce){.stu-row,.stu-bar,.stu-bulk{animation:none}}
+.stu-ask{min-width:0}
+/* Review S02: while a search is on its way the old rows stay, dimmed and not tappable, under "Updating results…". */
+.stu:has(form[aria-busy="true"]) .stu-card,.stu:has(form[aria-busy="true"]) .stu-cards{opacity:.5;pointer-events:none;transition:opacity .15s var(--ease)}
+@media (prefers-reduced-motion:reduce){.stu:has(form[aria-busy="true"]) .stu-card,.stu:has(form[aria-busy="true"]) .stu-cards{transition:none}}
+/* Review S03: one labelled Filters button on every width; what is on wraps instead of scrolling sideways. */
+.stu-on{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.stu-mchips.stu-on{overflow:visible}
+.stu-dfbtn{flex:none;height:40px;gap:8px;position:relative}
+.stu-dfbtn[data-on]{border-color:var(--acc);color:var(--accfg)}
+.stu-dfbtn .stu-fcount{position:static;margin-left:2px}

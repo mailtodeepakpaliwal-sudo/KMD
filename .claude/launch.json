@@ -1,0 +1,72 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "vppsone",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "vppsone-prod",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "start",
+        "--",
+        "-p",
+        "3100"
+      ],
+      "port": 3100
+    },
+    {
+      "name": "vppsone-dev-3200",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "-p",
+        "3200"
+      ],
+      "port": 3200
+    },
+    {
+      "name": "vppsone-prod-3300",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "start",
+        "--",
+        "-p",
+        "3300"
+      ],
+      "port": 3300
+    },
+    {
+      "name": "design-harness",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--config",
+        "tests/mobile-ui/design.vite.config.ts"
+      ],
+      "port": 3202,
+      "url": "http://127.0.0.1:3202"
+    },
+    {
+      "name": "school-office-harness",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--config",
+        "tests/school-office-ui/vite.config.ts"
+      ],
+      "port": 3216,
+      "url": "http://127.0.0.1:3216"
+    }
+  ]
+}

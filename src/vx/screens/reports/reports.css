@@ -1,0 +1,68 @@
+/* Reports: hub cards, collection table, the printable defaulter paper and the heat table. */
+
+:where(.vx, .vxt) .rp-f { display: flex; align-items: center; gap: 8px; }
+:where(.vx, .vxt) .rp-c { display: flex; flex-direction: column; min-width: 0; }
+:where(.vx, .vxt) .rp-e { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+:where(.vx, .vxt) .rp-m { font-size: 12px; color: var(--mut); }
+
+/* Hub */
+:where(.vx, .vxt) .rp-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+:where(.vx, .vxt) .rp-rb { display: flex; align-items: center; gap: 12px; border: 0; background: transparent; color: var(--fg); text-align: left; width: 100%; text-decoration: none; line-height: normal; }
+:where(.vx, .vxt) .rp-t36 { width: 36px; height: 36px; border-radius: 11px; }
+:where(.vx, .vxt) .rp-tt { font-size: 15px; font-weight: 700; }
+:where(.vx, .vxt) .rp-sq { flex: none; width: 38px; height: 38px; padding: 0; }
+:where(.vx, .vxt) .rp-xi { animation: xIn .32s var(--ease) both; }
+:where(.vx, .vxt) .rp-lh button { line-height: normal; }
+:where(.vx, .vxt) .rp-scr { padding: 20px 28px 40px; display: flex; flex-direction: column; gap: 16px; }
+:where(.vx, .vxt) .rp-dt { width: 10px; height: 10px; border-radius: 5px; flex: none; }
+:where(.vx, .vxt) .rp-ls > * + * { border-top: 1px solid var(--bd); }
+:where(.vx, .vxt) .rp-cg { display: grid; grid-template-columns: minmax(130px, 1.5fr) 72px repeat(5, minmax(76px, 1fr)); gap: 8px; align-items: center; padding: 0 16px; min-height: 44px; }
+:where(.vx, .vxt) .rp-ib { flex: none; width: 36px; height: 36px; border-radius: 11px; display: flex; align-items: center; justify-content: center; }
+
+/* Tables */
+:where(.vx, .vxt) .rp-scroll { overflow-x: auto; }
+
+/* Defaulter paper */
+:where(.vx, .vxt) .rp-paper { max-width: 860px; width: 100%; margin: 0 auto; background: #fff; color: #111; border: 1px solid var(--bd); border-radius: 6px; padding: 30px 34px; box-shadow: var(--sh); }
+:where(.vx, .vxt) .rp-paper h2 { margin: 0; font-size: 20px; text-align: center; }
+:where(.vx, .vxt) .rp-paper .rp-ph { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 2px solid #111; }
+:where(.vx, .vxt) .rp-paper .rp-pc { display: flex; align-items: baseline; justify-content: space-between; margin-top: 22px; padding-bottom: 6px; border-bottom: 1.5px solid #111; font-weight: 700; }
+:where(.vx, .vxt) .rp-paper table { width: 100%; border-collapse: collapse; font-size: 13px; }
+:where(.vx, .vxt) .rp-paper th { text-align: left; font-size: 11px; font-weight: 500; color: #555; padding: 6px 4px; border-bottom: 1px solid #ccc; }
+:where(.vx, .vxt) .rp-paper td { padding: 9px 4px; border-bottom: 1px solid #eee; }
+:where(.vx, .vxt) .rp-paper .r { text-align: right; font-variant-numeric: tabular-nums; }
+:where(.vx, .vxt) .rp-paper .lf { color: #8a5300; }
+:where(.vx, .vxt) .rp-paper .sig { width: 90px; border-bottom: 1px dashed #aaa; }
+:where(.vx, .vxt) .rp-paper .rp-sum { display: flex; justify-content: space-between; padding: 8px 4px; font-weight: 700; font-size: 13px; }
+
+/* Heat table */
+:where(.vx, .vxt) .rp-heat { width: 100%; border-collapse: separate; border-spacing: 4px; font-size: 13px; }
+:where(.vx, .vxt) .rp-heat th { font-size: 11px; font-weight: 600; color: var(--mut); text-align: right; padding: 2px 8px; }
+:where(.vx, .vxt) .rp-heat th:first-child { text-align: left; }
+:where(.vx, .vxt) .rp-hc { display: flex; flex-direction: column; align-items: flex-end; width: 100%; min-width: 86px; padding: 6px 10px; border-radius: 10px; border: 2px solid transparent; color: var(--fg); text-decoration: none; font-variant-numeric: tabular-nums; }
+:where(.vx, .vxt) .rp-hc.on { border-color: var(--pri); }
+:where(.vx, .vxt) .rp-hc small { font-size: 11px; opacity: .8; }
+:where(.vx, .vxt) .rp-ctot td { padding-top: 10px; border-top: 2px solid var(--bd); font-weight: 700; color: var(--fg); }
+:where(.vx, .vxt) .rp-nd { text-align: right; padding: 6px 8px; font-variant-numeric: tabular-nums; color: var(--mut); }
+
+/* Day book */
+:where(.vx, .vxt) .rp-db { display: grid; grid-template-columns: 64px 110px minmax(0, 1.4fr) 90px 100px 100px minmax(0, 1fr); gap: 10px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--bd); font-size: 14px; }
+:where(.vx, .vxt) .rp-dbh { background: var(--s2); border-top: 0; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--mut); }
+
+/* Teacher message */
+:where(.vx, .vxt) .rp-wa { padding: 12px; border-radius: 14px; background: var(--wabg); }
+:where(.vx, .vxt) .rp-wa > div { padding: 10px 12px 6px; border-radius: 4px 14px 14px 14px; background: var(--wab); color: var(--wafg); font-size: 13px; line-height: 1.5; white-space: pre-line; max-height: 260px; overflow: auto; }
+
+@media print {
+  .vx .rp-noprint { display: none !important; }
+  .vx .rp-paper { border: 0; box-shadow: none; padding: 0; max-width: none; }
+}
+
+@container vx (max-width: 899px) {
+  .vx .rp-scr { gap: 14px; }
+  .vx .rp-cards { grid-template-columns: minmax(0, 1fr); }
+  .vx .rp-paper { padding: 18px 14px; border-radius: 0; }
+  .vx .rp-paper .hide-p { display: none; }
+  .vx .rp-db { grid-template-columns: 52px minmax(0, 1fr) 90px; }
+  .vx .rp-db > .hide-p { display: none; }
+}

@@ -1,0 +1,46 @@
+{
+  "measuredAt": "2026-10-10T13:31:07.554Z",
+  "method": "Unique route-referenced production client chunks; excludes RSC/HTML payloads. Bundle regression proxy, not browser transfer or latency.",
+  "routes": {
+    "/login": {
+      "files": 22,
+      "bytes": 783292,
+      "gzipBytes": 234316
+    },
+    "/teach": {
+      "files": 23,
+      "bytes": 801937,
+      "gzipBytes": 238303
+    },
+    "/teach/attendance": {
+      "files": 24,
+      "bytes": 841469,
+      "gzipBytes": 250444
+    },
+    "/dashboard": {
+      "files": 22,
+      "bytes": 766666,
+      "gzipBytes": 228423
+    },
+    "/students": {
+      "files": 21,
+      "bytes": 765255,
+      "gzipBytes": 226859
+    },
+    "/fees/payments": {
+      "files": 26,
+      "bytes": 784394,
+      "gzipBytes": 235354
+    },
+    "/fees/transactions": {
+      "files": 33,
+      "bytes": 895630,
+      "gzipBytes": 269953
+    },
+    "/preferences": {
+      "files": 22,
+      "bytes": 773458,
+      "gzipBytes": 230140
+    }
+  }
+}

@@ -1,0 +1,338 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+
+import * as m from "@/messages/pairs";
+import { assertPermission } from "@/platform/auth/current-staff";
+import { viewingTestSession } from "@/platform/auth/staff-scope";
+import { isRealAdmin } from "@/platform/auth/test-session-policy";
+import { testSessionMessages } from "@/messages/setup";
+import { createClient } from "@/platform/supabase/server";
+import { assertNotPreviewing } from "@/vx/view-as";
+import { decodeMessage, t, type Localized } from "@/platform/i18n/language";
+import {
+  authorityChangeIn,
+  authorityRefusalMessages,
+  canDeactivate,
+  checkboxValue,
+  createStaffSchema,
+  mayChangeAuthority,
+  normalizeShortName,
+  rolesAssignableBy,
+  updateStaffSchema,
+} from "@/modules/staff/domain/staff";
+import {
+  changeStaffAuthority,
+  createStaff,
+  findByShortName,
+  actorMayManage,
+  getStaffById,
+  updateStaff,
+} from "@/modules/staff/data/staff-repo";
+import { writeStaffConsent } from "@/modules/staff-notices/data/consent";
+
+export type StaffFormState = {
+  status: "idle" | "error";
+  /** Field name -> message pair. The form renders the reader's half. */
+  fieldErrors: Record<string, Localized>;
+  /** For a failure that is not about one field. */
+  message: Localized | null;
+};
+
+function failure(
+  fieldErrors: Record<string, Localized> = {},
+  message: Localized | null = null,
+): StaffFormState {
+  return { status: "error", fieldErrors, message };
+}
+
+/**
+ * Zod's issues, flattened onto the field names the form uses.
+ *
+ * Zod carries a `string`, so the domain encodes each pair as JSON and this is
+ * where it is unpacked. A message from somewhere else — one of Zod's own
+ * built-ins — decodes to itself in both halves rather than vanishing.
+ */
+function fieldErrorsFrom(error: {
+  issues: { path: PropertyKey[]; message: string }[];
+}): Record<string, Localized> {
+  const result: Record<string, Localized> = {};
+  for (const issue of error.issues) {
+    const field = String(issue.path[0] ?? "");
+    if (field && !result[field]) {
+      result[field] = decodeMessage(issue.message);
+    }
+  }
+  return result;
+}
+
+function readForm(formData: FormData) {
+  return {
+    displayName: (formData.get("displayName") ?? "").toString(),
+    role: (formData.get("role") ?? "").toString(),
+    phone: (formData.get("phone") ?? "").toString(),
+    whatsappPhone: (formData.get("whatsappPhone") ?? "").toString(),
+    isTeaching: checkboxValue(formData.get("isTeaching")),
+    preferredLanguage: (formData.get("preferredLanguage") ?? "hi").toString(),
+  };
+}
+
+export async function createStaffAction(
+  _previous: StaffFormState,
+  formData: FormData,
+): Promise<StaffFormState> {
+  const staff = await assertPermission("staff:manage");
+
+  const parsed = createStaffSchema.safeParse({
+    ...readForm(formData),
+    shortName: (formData.get("shortName") ?? "").toString(),
+  });
+
+  if (!parsed.success) {
+    return failure(fieldErrorsFrom(parsed.error));
+  }
+
+  // A new profile's role is who that person becomes the day a login is linked
+  // to it, so the office may create teachers and viewers and nothing that
+  // holds power (D-205). Checked here; the form only offers what passes.
+  if (!rolesAssignableBy(staff.role).includes(parsed.data.role)) {
+    return failure({ role: authorityRefusalMessages.not_admin });
+  }
+
+  // Checked before the insert so the message lands on the field rather than
+  // arriving as a unique-constraint violation nobody can read. The index is
+  // still the thing that guarantees it — this is only for the wording.
+  const clash = await findByShortName(parsed.data.shortName);
+  if (clash) {
+    return failure({
+      shortName: t(
+        `यह नाम ${clash.displayName} के पास है`,
+        `Already used by ${clash.displayName}`,
+      ),
+    });
+  }
+
+  try {
+    // A test account's new colleague is a test account too (Phase 3), and so
+    // is anyone added while the test session is open (owner, 8 Nov 2026):
+    // the test session holds test accounts only.
+    await createStaff(parsed.data, staff.userId, { isTestAccount: staff.isTestAccount === true || (await viewingTestSession()) });
+  } catch (error) {
+    // The race the check above cannot close: two admins submitting the same
+    // short name at once. The index catches it; this translates it.
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("staff_profiles_short_name_unique_ci")) {
+      return failure({
+        shortName: t(
+          "यह संक्षिप्त नाम अभी-अभी ले लिया गया",
+          "That short name was just taken",
+        ),
+      });
+    }
+    return failure({}, m.profileNotSaved);
+  }
+
+  revalidatePath("/staff");
+  redirect("/staff");
+}
+
+export async function updateStaffAction(
+  _previous: StaffFormState,
+  formData: FormData,
+): Promise<StaffFormState> {
+  const actor = await assertPermission("staff:manage");
+  const id = (formData.get("id") ?? "").toString();
+
+  if (!id) {
+    return failure({}, m.profileNotFound);
+  }
+
+  const parsed = updateStaffSchema.safeParse(readForm(formData));
+  if (!parsed.success) {
+    return failure(fieldErrorsFrom(parsed.error));
+  }
+
+  const target = await getStaffById(id);
+  if (!target) {
+    return failure({}, m.profileNotFound);
+  }
+  if (!(await actorMayManage(actor, target.id))) {
+    return failure({}, authorityRefusalMessages.test_account);
+  }
+
+  // Changing your own role is how an admin accidentally locks the school out
+  // of its own master data — there may be only one of them.
+  if (target.id === actor.id && parsed.data.role !== actor.role) {
+    return failure({ role: m.cannotChangeOwnRole });
+  }
+
+  // The record and the authority are two different edits (D-205). Anybody with
+  // `staff:manage` may correct a name or a number; only an administrator may
+  // change what this person is allowed to do.
+  const authority = authorityChangeIn(target, { role: parsed.data.role });
+  if (authority && !mayChangeAuthority(actor.role)) {
+    return failure({ role: authorityRefusalMessages.not_admin });
+  }
+
+  // Submitting a short name at all means the form was tampered with: the field
+  // is rendered read-only and is not in the update schema. Refuse rather than
+  // silently ignore, so the caller learns the rule.
+  const submittedShortName = formData.get("shortName");
+  if (
+    submittedShortName &&
+    normalizeShortName(submittedShortName.toString()) !== target.shortName
+  ) {
+    return failure({ shortName: m.shortNameImmutable });
+  }
+
+  try {
+    await updateStaff(id, parsed.data);
+  } catch {
+    return failure({}, m.changesNotSaved);
+  }
+
+  if (authority) {
+    const result = await changeStaffAuthority({
+      actorStaffId: actor.id,
+      targetStaffId: id,
+      role: authority.role,
+      isActive: authority.isActive,
+    }).catch(() => null);
+
+    if (!result) return failure({}, m.changesNotSaved);
+    if (!result.ok) return failure({ role: authorityRefusalMessages[result.reason] });
+  }
+
+  revalidatePath("/staff");
+  revalidatePath(`/staff/${id}`);
+  redirect(`/staff/${id}`);
+}
+
+/**
+ * Switch somebody's access on or off. Administrators only (D-205).
+ *
+ * A plain form action rather than a stateful one, so a refusal throws into the
+ * page's error boundary; the button is not rendered for anybody who would be
+ * refused, so reaching the throw means the form was replayed or tampered with.
+ */
+export async function setStaffActiveAction(formData: FormData) {
+  const actor = await assertPermission("staff:manage");
+  if (!mayChangeAuthority(actor.role)) {
+    throw new Error(authorityRefusalMessages.not_admin.en);
+  }
+
+  const id = (formData.get("id") ?? "").toString();
+  const nextActive = formData.get("isActive") === "true";
+
+  const target = await getStaffById(id);
+  if (!target) {
+    throw new Error("That profile was not found.");
+  }
+  if (!(await actorMayManage(actor, target.id))) {
+    throw new Error(authorityRefusalMessages.test_account.en);
+  }
+
+  // The same rule the button's disabled state uses, checked again here —
+  // a disabled button is a hint, not a guard.
+  if (!nextActive) {
+    const verdict = canDeactivate(target, actor.id);
+    if (!verdict.allowed) {
+      throw new Error(verdict.reason?.en ?? "Cannot deactivate this profile.");
+    }
+  }
+
+  const result = await changeStaffAuthority({
+    actorStaffId: actor.id,
+    targetStaffId: id,
+    role: target.role,
+    isActive: nextActive,
+  });
+  if (!result.ok) {
+    throw new Error(authorityRefusalMessages[result.reason].en);
+  }
+
+  revalidatePath("/staff");
+  revalidatePath(`/staff/${id}`);
+}
+
+/**
+ * Mark or unmark a test account (Phase 3, D-340; critique0 #14). A real
+ * administrator only — role admin and not a test account, which on a confined
+ * deployment nobody is — never on themselves, with a reason, logged to
+ * staff_authority_changes.
+ *
+ * Through the signed-in person's own client, not the service role:
+ * `vppsone.set_test_account` reads the actor from auth.uid() and checks all of
+ * that again against the rows as they are now, and a direct UPDATE of the flag
+ * from a signed-in session is refused by a trigger. A plain form action, so a
+ * refusal throws into the page's error boundary (as setStaffActiveAction does).
+ */
+export async function setTestAccountAction(formData: FormData) {
+  const actor = await assertPermission("staff:manage");
+  await assertNotPreviewing();
+  if (!isRealAdmin(actor)) {
+    throw new Error(testSessionMessages.notRealAdmin.en);
+  }
+
+  const id = (formData.get("id") ?? "").toString();
+  const value = formData.get("isTestAccount") === "true";
+  const reason = (formData.get("reason") ?? "").toString().trim();
+  if (!reason) throw new Error(testSessionMessages.reasonRequired.en);
+  if (id === actor.id) throw new Error(testSessionMessages.notSelf.en);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("set_test_account", {
+    p_profile_id: id,
+    p_value: value,
+    p_reason: reason.slice(0, 500),
+  });
+  const result = (data ?? null) as { ok?: boolean; reason?: string } | null;
+  if (error || !result?.ok) {
+    const why = result?.reason;
+    throw new Error(
+      why === "self"
+        ? testSessionMessages.notSelf.en
+        : why === "not_real_admin"
+          ? testSessionMessages.notRealAdmin.en
+          : why === "reason_required"
+            ? testSessionMessages.reasonRequired.en
+            : testSessionMessages.failed.en,
+    );
+  }
+
+  revalidatePath("/staff");
+  revalidatePath(`/staff/${id}`);
+}
+
+/**
+ * An administrator records WhatsApp consent collected in person or on the
+ * training form (go-live Phase F, plan §8.3), or that the person said no.
+ * Administrators only, never a test account on a real profile (D-351 (4)),
+ * and stamped with who recorded it. A plain form action, like the two above:
+ * the form is only rendered for an administrator, so a refusal is a replay.
+ */
+export async function recordWhatsappConsentAction(formData: FormData) {
+  const actor = await assertPermission("staff:manage");
+  await assertNotPreviewing();
+  if (!mayChangeAuthority(actor.role)) {
+    throw new Error(authorityRefusalMessages.not_admin.en);
+  }
+  const id = (formData.get("id") ?? "").toString();
+  const choice = (formData.get("consent") ?? "").toString();
+  if (choice !== "form" && choice !== "admin_recorded" && choice !== "no") {
+    throw new Error("Choose what was recorded.");
+  }
+  const target = await getStaffById(id);
+  if (!target) throw new Error("That profile was not found.");
+  if (!(await actorMayManage(actor, target.id))) {
+    throw new Error(authorityRefusalMessages.test_account.en);
+  }
+  await writeStaffConsent({
+    staffId: target.id,
+    optIn: choice !== "no",
+    source: choice === "no" ? "admin_recorded" : choice,
+    recordedBy: actor.id,
+  });
+  revalidatePath(`/staff/${id}`);
+}

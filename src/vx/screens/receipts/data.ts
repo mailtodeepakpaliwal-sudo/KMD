@@ -1,0 +1,241 @@
+import "server-only";
+
+import { createAdminClient } from "@/platform/supabase/admin";
+import { createClient } from "@/platform/supabase/server";
+
+/*
+ * The fee desk's own records on /receipts, in the `vppsone` schema: counted
+ * day closes (insert-only, a reopen is a new row) and reversal requests for an
+ * admin. Reads go through the signed-in client and its RLS; writes through
+ * the service-role client, called only from actions that checked first.
+ */
+
+export type CloseEventRow = {
+  id: string;
+  paymentDate: string;
+  action: "close" | "reopen";
+  cashExpected: number;
+  cashCounted: number;
+  upiChecked: boolean;
+  receiptCount: number;
+  reversedCount: number;
+  expected: Record<string, number>;
+  note: string | null;
+  actorName: string | null;
+  createdAt: string;
+};
+
+type CloseEventDb = {
+  id: string;
+  payment_date: string;
+  action: "close" | "reopen";
+  cash_expected: number | string;
+  cash_counted: number | string;
+  upi_checked: boolean;
+  receipt_count: number;
+  reversed_count: number;
+  expected: Record<string, number> | null;
+  note: string | null;
+  actor_name: string | null;
+  created_at: string;
+};
+
+function toEvent(r: CloseEventDb): CloseEventRow {
+  return {
+    id: r.id,
+    paymentDate: r.payment_date,
+    action: r.action,
+    cashExpected: Number(r.cash_expected) || 0,
+    cashCounted: Number(r.cash_counted) || 0,
+    upiChecked: r.upi_checked,
+    receiptCount: r.receipt_count,
+    reversedCount: r.reversed_count,
+    expected: r.expected ?? {},
+    note: r.note,
+    actorName: r.actor_name,
+    createdAt: r.created_at,
+  };
+}
+
+/** Close and reopen events for the days from `from` to `to`, oldest first. */
+export async function listCloseEvents(from: string, to: string, opts: { strict?: boolean; sessionLabel: string }): Promise<CloseEventRow[]> {
+  const supabase = await createClient();
+  const events: CloseEventRow[] = [];
+  const pageSize = 200;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("fee_day_close_events")
+      .select("id, payment_date, action, cash_expected, cash_counted, upi_checked, receipt_count, reversed_count, expected, note, actor_name, created_at")
+      .gte("payment_date", from)
+      .lte("payment_date", to)
+      .eq("session_label", opts.sessionLabel)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    // Never mistake a failed page for an open day or a complete history.
+    if (error || !Array.isArray(data)) {
+      if (opts.strict) throw new Error(`Could not read the day's close history: ${error?.message ?? "Invalid response"}`);
+      return [];
+    }
+    events.push(...(data as CloseEventDb[]).map(toEvent));
+    if (data.length < pageSize) return events;
+  }
+}
+
+export type NewCloseEvent = {
+  paymentDate: string;
+  action: "close" | "reopen";
+  sessionLabel: string;
+  expected: Record<string, number>;
+  denominations: Record<string, number>;
+  cashExpected: number;
+  cashCounted: number;
+  upiChecked: boolean;
+  receiptCount: number;
+  reversedCount: number;
+  note: string | null;
+  actorId: string;
+  actorName: string;
+};
+
+export async function insertCloseEvent(e: NewCloseEvent): Promise<void> {
+  const { error } = await createAdminClient()
+    .from("fee_day_close_events")
+    .insert({
+      payment_date: e.paymentDate,
+      action: e.action,
+      session_label: e.sessionLabel,
+      expected: e.expected,
+      denominations: e.denominations,
+      cash_expected: e.cashExpected,
+      cash_counted: e.cashCounted,
+      upi_checked: e.upiChecked,
+      receipt_count: e.receiptCount,
+      reversed_count: e.reversedCount,
+      note: e.note,
+      actor_id: e.actorId,
+      actor_name: e.actorName,
+    });
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Display names for fee user ids (a reversal's `created_by`). The id on a fee
+ * row is the auth user, so it is matched against `staff_profiles.user_id`, and
+ * against `id` too for rows written with the profile id. Unknown ids are
+ * simply absent; a name is a courtesy, never a gate.
+ */
+export async function staffNamesForUsers(ids: readonly (string | null | undefined)[]): Promise<Map<string, string>> {
+  const unique = [...new Set(ids.filter((v): v is string => typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v)))];
+  const names = new Map<string, string>();
+  if (unique.length === 0) return names;
+  const list = unique.join(",");
+  const { data, error } = await createAdminClient()
+    .from("staff_profiles")
+    .select("id, user_id, display_name")
+    .or(`user_id.in.(${list}),id.in.(${list})`);
+  if (error || !Array.isArray(data)) return names;
+  for (const r of data as { id: string; user_id: string | null; display_name: string | null }[]) {
+    if (!r.display_name) continue;
+    if (r.user_id) names.set(r.user_id, r.display_name);
+    names.set(r.id, r.display_name);
+  }
+  return names;
+}
+
+export type PendingRequest = { id: string; createdAt: string; requestedByName: string | null; reasonCode: string; note: string | null };
+
+export async function pendingReversalRequest(receiptId: string): Promise<PendingRequest | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("fee_desk_requests")
+    .select("id, created_at, requested_by_name, reason_code, note")
+    .eq("kind", "reversal")
+    .eq("status", "pending")
+    .eq("receipt_id", receiptId)
+    .limit(1);
+  if (error) throw new Error(error.message);
+  const r = (data ?? [])[0] as { id: string; created_at: string; requested_by_name: string | null; reason_code: string; note: string | null } | undefined;
+  return r ? { id: r.id, createdAt: r.created_at, requestedByName: r.requested_by_name, reasonCode: r.reason_code, note: r.note } : null;
+}
+
+/**
+ * Every reversal still waiting for an admin in a session, by receipt id: the
+ * list marks those receipts, and the day close names them so the cash is not
+ * counted blind (smoke 20 Oct). A handful at most, so no id list is sent.
+ */
+export async function pendingReversalsBySession(sessionLabel: string): Promise<Map<string, { amount: number; reasonCode: string; by: string | null }>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("fee_desk_requests")
+    .select("receipt_id, amount, reason_code, requested_by_name")
+    .eq("kind", "reversal")
+    .eq("status", "pending")
+    .eq("session_label", sessionLabel)
+    .limit(500);
+  if (error) throw new Error(error.message);
+  const out = new Map<string, { amount: number; reasonCode: string; by: string | null }>();
+  for (const r of (data ?? []) as { receipt_id: string | null; amount: number | string; reason_code: string; requested_by_name: string | null }[]) {
+    if (r.receipt_id) out.set(r.receipt_id, { amount: Number(r.amount) || 0, reasonCode: r.reason_code, by: r.requested_by_name });
+  }
+  return out;
+}
+
+/** The admin keeps the receipt: the request waiting on it is declined, with the reason. */
+export async function declineReversalRequests(receiptId: string, deciderId: string, note: string): Promise<number> {
+  const { data, error } = await createAdminClient()
+    .from("fee_desk_requests")
+    .update({ status: "declined", decided_by: deciderId, decided_at: new Date().toISOString(), decision_note: note })
+    .eq("kind", "reversal")
+    .eq("status", "pending")
+    .eq("receipt_id", receiptId)
+    .select("id");
+  if (error) throw new Error(error.message);
+  return data?.length ?? 0;
+}
+
+export async function insertReversalRequest(r: {
+  sessionLabel: string;
+  studentId: string;
+  receiptId: string;
+  receiptNumber: string;
+  amount: number;
+  reasonCode: string;
+  note: string | null;
+  requestedBy: string;
+  requestedByName: string;
+}): Promise<"created" | "exists"> {
+  const { error } = await createAdminClient()
+    .from("fee_desk_requests")
+    .insert({
+      kind: "reversal",
+      session_label: r.sessionLabel,
+      student_id: r.studentId,
+      receipt_id: r.receiptId,
+      receipt_number: r.receiptNumber,
+      amount: r.amount,
+      reason_code: r.reasonCode,
+      note: r.note,
+      requested_by: r.requestedBy,
+      requested_by_name: r.requestedByName,
+    });
+  if (error) {
+    if (error.code === "23505") return "exists";
+    throw new Error(error.message);
+  }
+  return "created";
+}
+
+/**
+ * The admin has reversed the receipt: any request for it is now decided.
+ * Without this the request stayed "pending" in Needs you for good.
+ */
+export async function approveReversalRequests(receiptId: string, deciderId: string, note: string | null): Promise<void> {
+  const { error } = await createAdminClient()
+    .from("fee_desk_requests")
+    .update({ status: "approved", decided_by: deciderId, decided_at: new Date().toISOString(), decision_note: note })
+    .eq("kind", "reversal")
+    .eq("status", "pending")
+    .eq("receipt_id", receiptId);
+  if (error) throw new Error(error.message);
+}

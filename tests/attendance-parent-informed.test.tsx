@@ -1,0 +1,275 @@
+// @vitest-environment jsdom
+import * as React from "react";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
+/*
+ * Sick-day notes on the register (D-588): a child whose parent told the
+ * school on WhatsApp starts as Absent with "Parent informed" beside the name,
+ * the teacher can still change it, and no absent WhatsApp is offered for that
+ * family. Synthetic data.
+ */
+const state = vi.hoisted(() => ({ save: vi.fn(), check: vi.fn(), toast: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+// The register's lazy pieces (D-601) through React.lazy, so a test can wait for them like a phone does.
+vi.mock("next/dynamic", async () => {
+  const { lazy, Suspense, createElement } = await import("react");
+  return {
+    default: (load: () => Promise<React.ComponentType<Record<string, unknown>>>) => {
+      const Lazy = lazy(async () => ({ default: await load() }));
+      return (props: Record<string, unknown>) => createElement(Suspense, { fallback: null }, createElement(Lazy, props));
+    },
+  };
+});
+vi.mock("next/link", () => ({ useLinkStatus: () => ({ pending: false }), default: ({ children }: { children: React.ReactNode }) => <span>{children}</span> }));
+vi.mock("@/platform/drafts/use-durable-draft", () => ({ useOnline: () => true }));
+vi.mock("@/platform/drafts/store", () => ({ loadDraft: async () => null, saveDraft: async () => undefined, removeDraft: async () => undefined }));
+vi.mock("@/vx/screens/teach/actions", () => ({ saveRegisterVx: state.save, checkRegisterVx: state.check }));
+vi.mock("@/vx/i18n", () => ({ useVx: () => ({ tx: (p: { en: string } | string) => (typeof p === "string" ? p : p.en), sub: () => null, language: "en" }) }));
+vi.mock("@/vx/shell/sidebar", () => ({ LangButton: () => null }));
+vi.mock("@/vx/ui/overlays", () => ({
+  useToast: () => ({ show: state.toast }),
+  Sheet: ({ open, children, footer, sub }: { open: boolean; children: React.ReactNode; footer: React.ReactNode; sub?: React.ReactNode }) =>
+    open ? <section data-sheet><p data-sub>{sub}</p>{children}{footer}</section> : null,
+}));
+vi.mock("@/vx/screens/teach/ui/shared", () => ({
+  DeskHelp: () => null, HelpIcon: () => null, HelpSheet: () => null, LangSeg: () => null, DrawnTick: () => null,
+  TchTop: ({ actions }: { actions?: React.ReactNode }) => <header>{actions}</header>,
+  useUrlState: (_key: string, initial: string | null) => React.useState(initial),
+}));
+
+import { TeachAttend } from "@/vx/screens/teach/ui/attend";
+import type { AttendData } from "@/vx/screens/teach/data";
+
+const classId = "00000000-0000-4000-8000-0000000000c1";
+const kidA = "00000000-0000-4000-8000-0000000000a1";
+const kidB = "00000000-0000-4000-8000-0000000000a2";
+const TOLD = "No absent message goes to a parent who told the school on WhatsApp.";
+const data = (over: Record<string, unknown> = {}) => ({
+  kind: "class", sessionLabel: "TEST-2026-27", classId, classLabel: "QA class", day: "2026-10-10", prevDay: "2026-10-09",
+  choices: [], closed: false, canSave: true, canCorrect: true, isOwner: true, correctsAny: false, onBehalf: false, reason: null,
+  informedNote: { en: TOLD, hi: "" },
+  roll: [
+    { id: kidA, name: "Test Alpha", rollNo: "1", admissionNo: null, hint: null, gender: null, birthday: false, informed: { en: "Parent informed · sick", hi: "" } },
+    { id: kidB, name: "Test Beta", rollNo: "2", admissionNo: null, hint: null, gender: null, birthday: false },
+  ],
+  registerId: null, revision: 0, saved: {}, yesterday: {}, receipt: null, parentAlerts: "ask_on", queuedAlerts: [], alertWhen: { en: "at 10 am" },
+  month: "2026-10", monthMarks: [], closedDays: [],
+  ...over,
+}) as unknown as AttendData;
+
+let root: Root;
+let host: HTMLDivElement;
+const card = (name: string) => [...host.querySelectorAll<HTMLButtonElement>("button.tc-akid")].find((b) => b.getAttribute("aria-label")?.startsWith(name))!;
+const sheet = () => host.querySelector("section[data-sheet]")!;
+const alertSwitch = () => sheet().querySelector<HTMLButtonElement>('button[role="switch"]');
+const saveButton = () => [...host.querySelectorAll<HTMLButtonElement>("section[data-sheet] button")].find((b) => b.textContent === "Save attendance")!;
+
+async function render(model: AttendData) {
+  await act(async () => root.render(<TeachAttend data={model} ownerId="qa-teacher" initialSheet="save" initialView={null} school="QA School" />));
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  state.save.mockReset(); state.check.mockReset().mockResolvedValue(null); state.toast.mockReset();
+  host = document.createElement("div"); document.body.append(host); root = createRoot(host);
+});
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+it("starts the informed child as Absent, says why, and offers no absent WhatsApp for that family", async () => {
+  await render(data());
+  expect(card("Test Alpha").getAttribute("aria-pressed")).toBe("true");
+  expect(card("Test Alpha").getAttribute("aria-label")).toContain("Parent informed · sick");
+  expect(card("Test Beta").getAttribute("aria-pressed")).toBe("false");
+  expect(card("Test Beta").getAttribute("aria-label")).not.toContain("Parent informed");
+  expect(sheet().textContent).toContain("Parent informed · sick");
+  expect(alertSwitch()).toBeNull();
+  expect(sheet().textContent).toContain(TOLD);
+  state.save.mockResolvedValueOnce({ status: "refused", message: { en: "QA closed", hi: "" } });
+  await act(async () => saveButton().click());
+  expect(JSON.parse(state.save.mock.calls[0][0]).marks).toEqual([
+    { studentId: kidA, status: "absent" },
+    { studentId: kidB, status: "present" },
+  ]);
+});
+
+it("starts the child as Leave when the class teacher chose Leave for the parent's note (D-598)", async () => {
+  await render(data({
+    roll: [
+      { id: kidA, name: "Test Alpha", rollNo: "1", admissionNo: null, hint: null, gender: null, birthday: false, informed: { en: "Parent informed · sick", hi: "" }, informedMark: "leave" },
+      { id: kidB, name: "Test Beta", rollNo: "2", admissionNo: null, hint: null, gender: null, birthday: false },
+    ],
+  }));
+  expect(card("Test Alpha").getAttribute("aria-label")).toContain("Parent informed · sick");
+  expect(alertSwitch()).toBeNull();
+  state.save.mockResolvedValueOnce({ status: "refused", message: { en: "QA closed", hi: "" } });
+  await act(async () => saveButton().click());
+  expect(JSON.parse(state.save.mock.calls[0][0]).marks).toEqual([
+    { studentId: kidA, status: "leave" },
+    { studentId: kidB, status: "present" },
+  ]);
+});
+
+/* A child on Leave read "Half-day" on the card, in the counts and in the save sheet until 13 Nov (D-603). */
+const onLeave = () => data({
+  roll: [
+    { id: kidA, name: "Test Alpha", rollNo: "1", admissionNo: null, hint: null, gender: null, birthday: false, informed: { en: "Parent informed · sick", hi: "" }, informedMark: "leave" },
+    { id: kidB, name: "Test Beta", rollNo: "2", admissionNo: null, hint: null, gender: null, birthday: false },
+  ],
+});
+const chip = (text: string) => [...host.querySelectorAll<HTMLButtonElement>("button.chip")].find((b) => b.textContent?.includes(text)) ?? null;
+const tileNames = () => [...sheet().querySelectorAll(".tc-ctile")].map((t) => t.textContent);
+
+it("reads a child on Leave as Leave, never Half-day, and offers a half day under the card (D-603)", async () => {
+  await render(onLeave());
+  expect(card("Test Alpha").getAttribute("aria-label")).toContain(", Leave, Parent informed · sick");
+  expect(card("Test Alpha").querySelector(".tc-stw")!.textContent).toBe("Leave");
+  expect(chip("Test: half-day instead")).not.toBeNull();
+  expect(chip("absent all day instead")).toBeNull();
+  expect(tileNames()).toEqual(["1Present", "0Absent", "1Leave"]);
+  expect(sheet().textContent).toContain("Leave (1)");
+  expect(sheet().textContent).not.toContain("Half-day (1)");
+  expect(sheet().querySelector("[data-sub]")!.textContent).toContain("1 present · 0 absent · 1 leave");
+
+  await act(async () => chip("Test: half-day instead")!.click());
+  expect(card("Test Alpha").querySelector(".tc-stw")!.textContent).toBe("Half-day");
+  expect(chip("Test: absent all day instead")).not.toBeNull();
+  expect(tileNames()).toEqual(["1Present", "0Absent", "1Half-day"]);
+  expect(sheet().textContent).toContain("Half-day (1)");
+});
+
+it("names both when the yellow group holds a half day and a Leave (D-603)", async () => {
+  await render(onLeave());
+  await act(async () => card("Test Beta").click());
+  // Both children are called Test, so Beta's chip is the second one.
+  const halfDayChips = [...host.querySelectorAll<HTMLButtonElement>("button.chip")].filter((b) => b.textContent?.includes("half-day instead"));
+  expect(halfDayChips).toHaveLength(2);
+  await act(async () => halfDayChips[1].click());
+  expect(tileNames()).toEqual(["0Present", "0Absent", "2Half-day or leave"]);
+  expect(sheet().textContent).toContain("Half-day (1)");
+  expect(sheet().textContent).toContain("Leave (1)");
+});
+
+/* With only a child on Leave, the save sheet said "Everyone is here today" and the desk's list "No one marked absent yet" (13 Nov, D-604). */
+it("never says everyone is here, or that no one is away, while a child is on Leave (D-604)", async () => {
+  await render(onLeave());
+  expect(host.textContent).toContain("Marked so far: 1 present, 1 leave.");
+  expect(host.textContent).not.toMatch(/Everyone (is|was) here/);
+  expect(host.textContent).not.toContain("No one marked absent yet");
+
+  // Present again: now everyone is here, and the register says so.
+  await act(async () => card("Test Alpha").click());
+  expect(card("Test Alpha").querySelector(".tc-stw")!.textContent).toBe("Present");
+  expect(host.textContent).toContain("Everyone is marked Present.");
+  expect(sheet().textContent).toMatch(/Everyone (is|was) here/);
+  expect(host.textContent).toContain("No one marked absent yet");
+});
+
+it("lists a child saved on Leave under Away on the saved card, not under Half day (D-603)", async () => {
+  await render(data({ ...onLeave(), registerId: "qa-register", revision: 1, saved: { [kidA]: "leave", [kidB]: "present" }, receipt: { savedAt: "2026-10-10T03:00:00Z", actorName: "QA", revision: 1 } }));
+  expect(host.textContent).toContain("Away: Test Alpha (Parent informed · sick)");
+  expect(host.textContent).not.toContain("Half day:");
+});
+
+it("offers the WhatsApp only for the child whose parent did not tell the school", async () => {
+  await render(data());
+  await act(async () => card("Test Beta").click());
+  expect(card("Test Beta").getAttribute("aria-pressed")).toBe("true");
+  expect(alertSwitch()).not.toBeNull();
+  expect(alertSwitch()!.textContent).toContain("1 parent ·");
+  expect(sheet().textContent).toContain(TOLD);
+});
+
+it("lets the teacher mark the informed child present, and then says nothing about the note in the sheet", async () => {
+  await render(data());
+  // Absent → half day → present, the register's own cycle.
+  for (let tap = 0; tap < 4 && card("Test Alpha").getAttribute("aria-pressed") === "true"; tap += 1) {
+    await act(async () => card("Test Alpha").click());
+  }
+  expect(card("Test Alpha").getAttribute("aria-pressed")).toBe("false");
+  expect(sheet().textContent).not.toContain(TOLD);
+});
+
+it("keeps what was saved over the note: a saved Present stays Present, and the saved card names who was away", async () => {
+  await render(data({ registerId: "qa-register", revision: 1, saved: { [kidA]: "present", [kidB]: "absent" }, receipt: { savedAt: "2026-10-10T03:00:00Z", actorName: "QA", revision: 1 } }));
+  expect(host.textContent).toContain("Away: Test Beta");
+  await act(async () => [...host.querySelectorAll("button")].find((b) => b.textContent === "Change attendance")!.click());
+  expect(card("Test Alpha").getAttribute("aria-pressed")).toBe("false");
+  expect(card("Test Beta").getAttribute("aria-pressed")).toBe("true");
+});
+
+it("names the informed child on the saved card with the parent's word", async () => {
+  await render(data({ registerId: "qa-register", revision: 1, saved: { [kidA]: "absent", [kidB]: "present" }, receipt: { savedAt: "2026-10-10T03:00:00Z", actorName: "QA", revision: 1 } }));
+  expect(host.textContent).toContain("Away: Test Alpha (Parent informed · sick)");
+});
+
+it("shows nothing new for a class with no note", async () => {
+  await render(data({ informedNote: undefined, roll: [{ id: kidB, name: "Test Beta", rollNo: "2", admissionNo: null, hint: null, gender: null, birthday: false }] }));
+  expect(card("Test Beta").getAttribute("aria-pressed")).toBe("false");
+  expect(host.textContent).not.toContain("Parent informed");
+  expect(host.textContent).not.toContain(TOLD);
+});
+
+/* A parent's note still waiting (D-601): "Parent says sick" with Leave and Absent under the child. */
+const NOTE = "00000000-0000-4000-8000-0000000000e1";
+const asking = (over: Record<string, unknown> = {}) => data({
+  roll: [
+    { id: kidA, name: "Test Alpha", rollNo: "1", admissionNo: null, hint: null, gender: null, birthday: false, ask: { id: NOTE, line: { en: "Parent says sick", hi: "" } } },
+    { id: kidB, name: "Test Beta", rollNo: "2", admissionNo: null, hint: null, gender: null, birthday: false },
+  ],
+  ...over,
+});
+const settle = async () => {
+  for (let i = 0; i < 3; i += 1) await act(async () => { await vi.dynamicImportSettled(); });
+};
+const choice = (label: string) => host.querySelector<HTMLButtonElement>(`button[aria-label="${label} · Test Alpha"]`);
+const sent = () => JSON.parse(state.save.mock.calls.at(-1)![0]);
+
+it("shows a waiting note under the child, starts the child Present, and marks nothing until a tap", async () => {
+  await render(asking());
+  await settle();
+  expect(host.textContent).toContain("Parent says sick");
+  expect(card("Test Alpha").getAttribute("aria-pressed")).toBe("false");
+  expect(choice("Leave")!.getAttribute("aria-pressed")).toBe("false");
+  expect(choice("Absent")!.getAttribute("aria-pressed")).toBe("false");
+  state.save.mockResolvedValueOnce({ status: "refused", message: { en: "QA closed", hi: "" } });
+  await act(async () => saveButton().click());
+  expect(sent().notes).toEqual([]);
+  expect(sent().marks[0]).toEqual({ studentId: kidA, status: "present" });
+});
+
+it("Leave marks the child, and saving sends the note with that mark", async () => {
+  await render(asking());
+  await settle();
+  await act(async () => choice("Leave")!.click());
+  expect(choice("Leave")!.getAttribute("aria-pressed")).toBe("true");
+  expect(card("Test Alpha").getAttribute("aria-pressed")).toBe("true");
+  state.save.mockResolvedValueOnce({ status: "refused", message: { en: "QA closed", hi: "" } });
+  await act(async () => saveButton().click());
+  expect(sent().marks[0]).toEqual({ studentId: kidA, status: "leave" });
+  expect(sent().notes).toEqual([{ id: NOTE, studentId: kidA, mark: "leave" }]);
+});
+
+it("a tap on the card that makes the child Absent sends the note too, and offers no absent WhatsApp for that family", async () => {
+  await render(asking());
+  await settle();
+  await act(async () => card("Test Alpha").click());
+  expect(choice("Absent")!.getAttribute("aria-pressed")).toBe("true");
+  expect(alertSwitch()).toBeNull();
+  expect(sheet().textContent).toContain(TOLD);
+  expect(sheet().textContent).toContain("Parent says sick");
+  state.save.mockResolvedValueOnce({ status: "refused", message: { en: "QA closed", hi: "" } });
+  await act(async () => saveButton().click());
+  expect(sent().notes).toEqual([{ id: NOTE, studentId: kidA, mark: "absent" }]);
+});
+
+it("shows no buttons once the register is saved, until the teacher changes it", async () => {
+  await render(asking({ registerId: "qa-register", revision: 1, saved: { [kidA]: "present", [kidB]: "present" }, receipt: { savedAt: "2026-10-10T03:00:00Z", actorName: "QA", revision: 1 } }));
+  await settle();
+  expect(choice("Leave")).toBeNull();
+  await act(async () => [...host.querySelectorAll("button")].find((b) => b.textContent === "Change attendance")!.click());
+  await settle();
+  expect(choice("Leave")).not.toBeNull();
+});

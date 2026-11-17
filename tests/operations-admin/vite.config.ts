@@ -1,0 +1,18 @@
+import path from "node:path";
+import { defineConfig } from "vite";
+export default defineConfig({
+  root: path.resolve(__dirname), publicDir: path.resolve(__dirname, "../../public"),
+  resolve: { alias: {
+    "@/vx/screens/admin/student-document-actions": path.resolve(__dirname, "../mobile-ui/student-actions.ts"),
+    "@/app/(app)/school-office/actions": path.resolve(__dirname, "../shared/school-office-action-adapters.ts"),
+    "@/app/(app)/teach/tasks/actions": path.resolve(__dirname, "../shared/sampark-action-adapters.ts"),
+    "@/app/(app)/collection/photos/profile-actions": path.resolve(__dirname, "../shared/sampark-action-adapters.ts"),
+    "@/app/(app)/fees/students/actions": path.resolve(__dirname, "student-actions.ts"),
+    "@/vx/screens/family-contact/actions": path.resolve(__dirname, "../mobile-ui/student-actions.ts"),
+    "@/vx/screens/notes/actions": path.resolve(__dirname, "../mobile-ui/student-actions.ts"),
+    "@": path.resolve(__dirname, "../../src"),
+    "next/navigation": path.resolve(__dirname, "navigation.ts"),
+    "next/link": path.resolve(__dirname, "link.tsx"),
+    "next/image": path.resolve(__dirname, "../mobile-ui/image.tsx"),
+  } }, server: { host: "127.0.0.1", port: 3204, strictPort: true },
+});
