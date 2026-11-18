@@ -21,7 +21,8 @@ describe("school_notice_sends: the service role gets what the ported sender uses
   const sql = read("supabase", "fee-migrations", "20261031090000_school_notice_sends_service_grants.sql");
 
   it("says why it differs from the fees app", () => {
-    expect(sql.startsWith("-- ============================================================================\n-- KMD One fee-migration, One-only")).toBe(true);
+    // Written as "VPPS One" before the KMD conversion; applied files are not edited.
+    expect(sql).toMatch(/^-- =+\n-- (?:KMD|VPPS) One fee-migration, One-only/);
     expect(sql).toContain("Why it differs from the fees app");
   });
 

@@ -483,7 +483,7 @@ English:
 Sent by the task's own reviewed delivery, not the outbox, but staff templates
 all the same — submit them with the rest. Each name is ONE language (the
 teacher's choice picks `_en`, `_hi` or `_both`), category UTILITY, with a **URL
-button**: link `https://one.vpps.co.in/t/tasks/{{1}}`, where the dynamic suffix
+button**: link `https://one.kmd-school.example/t/tasks/{{1}}`, where the dynamic suffix
 `{{1}}` is the task's token (`buttonSuffix` from `claim_teacher_task_delivery`).
 Variables in every one: {{1}} teacher · {{2}} task · {{3}} due. When
 `AISENSY_CAMPAIGN_PREFIX` is set, it replaces the leading `vppsone` of the

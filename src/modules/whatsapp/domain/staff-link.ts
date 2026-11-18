@@ -90,7 +90,9 @@ export function linkCodeIn(text: string | null | undefined): FoundCode | null {
   const labelled = LABELLED.exec(words);
   if (labelled) {
     const code = `${labelled[1]}${labelled[2]}`.toUpperCase();
-    if (isLinkCode(code)) return { code, labelled: /vpps\s*one/i.test(words) };
+    // "KMD One", as linkMessage() writes it. This still looked for the old
+    // school's "VPPS One", so no prepared message counted as labelled (18 Nov 2026).
+    if (isLinkCode(code)) return { code, labelled: /kmd\s*one/i.test(words) };
   }
   const bare = BARE.exec(words);
   if (bare) {

@@ -85,7 +85,7 @@ export function staffAlertTemplateParams(facts: StaffAlertFacts): string[] {
   ];
 }
 
-/** Turns "+919413748575, 9352205884" into what AiSensy accepts, dropping what it would not. */
+/** Turns "+919413748575, 9876543210" into what AiSensy accepts, dropping what it would not. */
 export function parseStaffAlertNumbers(
   raw: string | null | undefined,
   toDestination: (value: string) => string | null,

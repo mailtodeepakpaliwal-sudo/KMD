@@ -9,7 +9,7 @@ import { MobileStepRail } from "@/ui/mobile/mobile-kit";
 import { useKeyboardOffset } from "@/ui/hooks/use-keyboard-offset";
 import { useMediaQuery } from "@/ui/hooks/use-media-query";
 import { UpiQrCode } from "@/modules/payments/ui/upi-qr-code";
-import { buildStudentFeeUpiPayment } from "@/modules/payments/domain/upi";
+import { buildStudentFeeUpiPayment, schoolUpiConfigured } from "@/modules/payments/domain/upi";
 import { Button } from "@/ui/primitives/button";
 import { Input } from "@/ui/primitives/input";
 import { splitAmountWithRemainderLast } from "@/modules/fees/domain/workbook";
@@ -1460,7 +1460,8 @@ export function MobilePaymentFlowSheet({
             {/* UPI: show the parent a QR that already carries the amount and
                 the student's reference, so nobody types a UTR into a phone at
                 a counter queue. Mode-conditional, per mobile v2 step 3. */}
-            {paymentMode === "upi" && Number(paymentAmountInput) > 0 && displayAdmNo ? (
+            {/* No QR at all until the school's own UPI ID is set (upi.ts). */}
+            {paymentMode === "upi" && schoolUpiConfigured() && Number(paymentAmountInput) > 0 && displayAdmNo ? (
               (() => {
                 const upi = buildStudentFeeUpiPayment({
                   admissionNo: displayAdmNo,

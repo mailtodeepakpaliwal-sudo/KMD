@@ -1,6 +1,6 @@
 # One student loading and interaction performance
 
-The user authorized implementation and immediate live release for One, specifically app loading, student lists/cards and Student 360. Target `one.vpps.co.in`, repository `veerpatta/vppsone`. Use the existing Next 16.4.3 / React 19 stack and current design.
+The user authorized implementation and immediate live release for One, specifically app loading, student lists/cards and Student 360. Target `one.kmd-school.example`, repository `veerpatta/vppsone`. Use the existing Next 16.4.3 / React 19 stack and current design.
 
 ## Evidence and approaches
 

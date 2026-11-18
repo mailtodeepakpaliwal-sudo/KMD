@@ -9,7 +9,7 @@ import { childFactsFromRow, receiptByKey, receiptKey, sendableReceipts, type Chi
 import { fitMessage, helperMessageBody, messageText, plainVersion, WA_LIMITS, type HelperMessage } from "@/modules/whatsapp/domain/helper-messages";
 import { helperAnswerSchema, helperSystemPrompt, planFromAnswer, type HelperAnswer } from "@/modules/whatsapp/domain/helper-ai";
 import { EMPTY_CHAT, MAX_RECEIPTS_PER_ASK, planTurn, receiptAsk, type PlanInput } from "@/modules/whatsapp/domain/helper-plan";
-import { receiptCaption, receiptPickList, receiptsCard, receiptUnsentReply, type Family, type ReplyContext } from "@/modules/whatsapp/domain/helper-replies";
+import { officeNumber, receiptCaption, receiptPickList, receiptsCard, receiptUnsentReply, type Family, type ReplyContext } from "@/modules/whatsapp/domain/helper-replies";
 import { detectLanguage, helperId, readTap, ruleIntent } from "@/modules/whatsapp/domain/helper-text";
 import { testRecordReadInContext } from "@/platform/fees-bridge/test-record-read";
 
@@ -249,7 +249,7 @@ describe("the receipt cards", () => {
 
   it("says plainly when the PDF could not be sent, with the office's number and a button to try again", () => {
     const reply = receiptUnsentReply(context("en"), aarav, aarav.receipts[0]);
-    expect(reply.kind === "buttons" && reply.body).toContain("ask the office for a copy: 9352205884");
+    expect(reply.kind === "buttons" && reply.body).toContain(`ask the office for a copy${officeNumber("en")}`);
     expect(reply.kind === "buttons" && reply.body).toContain("TEST-SVP-0002 · 1 Aug · ₹2,000");
     expect(buttonsOf(reply).map((button) => button.id)).toEqual([`vpai:receipt_pdf:${receiptKey(aarav, aarav.receipts[0])}`, "vpai:menu"]);
   });

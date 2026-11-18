@@ -156,7 +156,7 @@ export const ANNOTATIONS = {
   // Deployment identity
   VPPSONE_ENV: [OWNER, "set; must be `live` at C5 — the parent gate (D-353) and live Razorpay keys (D-354 (3)) need it"],
   APP_MODE: [OWNER, "add at C5: `production` — required together with VPPSONE_ENV=live (`getFeeSchema()` throws otherwise)"],
-  NEXT_PUBLIC_SITE_URL: [OWNER, "set — `https://one.vpps.co.in`"],
+  NEXT_PUBLIC_SITE_URL: [OWNER, "set — `https://one.kmd-school.example`"],
   VERCEL_ENV: [SYSTEM, "automatic — `production` is what makes a deployment unconfined (D-346)"],
   VERCEL_URL: [SYSTEM, "automatic"],
   VERCEL: [SYSTEM, "automatic — `1` on Vercel; next.config.ts skips the build's type check there (CI is the gate)"],
@@ -180,7 +180,8 @@ export const ANNOTATIONS = {
   WHATSAPP_CRON_SECRET: [OWNER, "leave unset — the pg_cron job sends Vault's VPPS_WHATSAPP_CRON_SECRET (whatsapp_cron_secret_matches)"],
   // School identity (receipts, PDFs)
   NEXT_PUBLIC_SCHOOL_NAME: ["fees Production value (owner)", "set"],
-  NEXT_PUBLIC_SCHOOL_PHONE: ["copy the fees Production value (owner)", "add at C5 — receipt header (critique1 B6)"],
+  NEXT_PUBLIC_SCHOOL_PHONE: ["copy the fees Production value (owner)", "add at C5 — receipt header (critique1 B6); also the office number in WhatsApp messages, left out while unset"],
+  NEXT_PUBLIC_SCHOOL_UPI_ID: [OWNER, "add when KMD has its own UPI ID — unset, no UPI QR or pay link is drawn anywhere (the old school's ID was removed 18 Nov 2026)"],
   NEXT_PUBLIC_SCHOOL_ADDRESS: ["copy the fees Production value (owner)", "add at C5 — receipt header"],
   NEXT_PUBLIC_SCHOOL_EMAIL: ["copy the fees Production value (owner)", "add at C5 — receipt header"],
   // Fee features

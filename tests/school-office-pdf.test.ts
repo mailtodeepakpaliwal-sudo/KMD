@@ -180,9 +180,11 @@ describe("the signed letterhead (D-540, D-541)", () => {
     }));
     // A receipt says "Lal Bhawan, Barkat Nagar, Jaipur – 302015"; the letterhead adds the district.
     expect(text).toContain("Lal Bhawan, Barkat Nagar, Jaipur (Raj.)");
-    expect(text).toContain("313332");
+    expect(text).toContain("302015");
+    // Never the old school's address or PIN codes.
     expect(text).not.toContain("Mela Ground");
     expect(text).not.toContain("313330");
+    expect(text).not.toContain("313332");
   }, 30000);
 });
 

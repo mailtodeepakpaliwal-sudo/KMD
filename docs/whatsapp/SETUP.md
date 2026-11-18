@@ -103,8 +103,8 @@ sent again by itself.
 
 ## The webhook
 
-**`https://one.vpps.co.in/api/webhooks/whatsapp-hub`** — on the hub's
-`APP_WEBHOOKS` as `one:https://one.vpps.co.in/api/webhooks/whatsapp-hub`
+**`https://one.kmd-school.example/api/webhooks/whatsapp-hub`** — on the hub's
+`APP_WEBHOOKS` as `one:https://one.kmd-school.example/api/webhooks/whatsapp-hub`
 (Janmejay set it on 9 Nov).
 
 - The body is Meta's webhook JSON, unchanged: statuses, parents' replies, and
@@ -144,7 +144,7 @@ for those, after a warning.
 
 ## Pay now and "Paid"
 
-Fee reminders keep the Razorpay Pay now button (`https://one.vpps.co.in/pay/{{1}}`,
+Fee reminders keep the Razorpay Pay now button (`https://one.kmd-school.example/pay/{{1}}`,
 the send's own pay code as a separate button component). When Razorpay's
 webhook confirms the payment and One posts it, the message that carried that
 pay code is marked **Paid** in the WhatsApp log.
@@ -156,7 +156,7 @@ the Fees number, which One never uses. The hub's account needs its own copy, so
 the same 22 templates (11 situations × Hindi and English) go to the hub under
 `_v8` names, **byte for byte the `_v7` wording**: category UTILITY, five
 blanks with the same samples, no footer, buttons Pay now
-(`https://one.vpps.co.in/pay/{{1}}`) then Call office. The set is built from
+(`https://one.kmd-school.example/pay/{{1}}`) then Call office. The set is built from
 the same descriptors (`modules/whatsapp/domain/hub-templates.ts`), so the two
 cannot drift.
 

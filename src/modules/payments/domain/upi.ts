@@ -11,11 +11,25 @@ export type StudentFeeUpiPayment = {
   amount: number;
 };
 
+/**
+ * KMD's UPI ID, from `NEXT_PUBLIC_SCHOOL_UPI_ID` (read literally so Next.js
+ * inlines it into the browser bundles that draw the QR).
+ *
+ * Empty until the owner sets it (18 Nov 2026). The VPPS → KMD conversion kept
+ * the old school's HDFC ID here under KMD's name, so a parent paying by the QR
+ * would have paid that school. While it is empty no UPI QR or link is drawn
+ * anywhere: check `schoolUpiConfigured()` before building one.
+ */
 export const SCHOOL_UPI_PAYMENT_CONFIG = {
-  vpa: "shriveerpattassecsch.68347408@hdfcbank",
-  payeeName: "SHRI KMD PUBLIC SCHOOL S SEC SCH",
+  vpa: process.env.NEXT_PUBLIC_SCHOOL_UPI_ID?.trim() ?? "",
+  payeeName: "KMD PUBLIC SCHOOL",
   currency: "INR",
 } as const;
+
+/** True only when the school has its own UPI ID set. */
+export function schoolUpiConfigured(): boolean {
+  return SCHOOL_UPI_PAYMENT_CONFIG.vpa.length > 0;
+}
 
 function wholeRupees(value: number) {
   return Math.max(0, Math.round(Number.isFinite(value) ? value : 0));

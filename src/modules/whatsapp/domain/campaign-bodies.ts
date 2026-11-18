@@ -34,8 +34,6 @@ import { approvedV6Campaign, fillBody } from "@/modules/whatsapp/domain/campaign
  * worse than no preview, because staff trust it.
  */
 
-const UPI = "upi://pay?pa=shriveerpattassecsch.68347408@hdfcbank";
-
 type Body = (params: readonly string[]) => string;
 
 /* ------------------------------------------------------------ v2, 22 Aug 2026 */
@@ -55,12 +53,9 @@ const feeDueEn: Body = ([p, s, c, phrase, amount, date, fee]) =>
     "",
     "Paying on or before the last date avoids the late fee. After that date the late fee above is added to the amount.",
     "",
-    "Pay at the school fee counter or using this UPI link:",
-    UPI,
+    "Pay at the school fee counter.",
     "",
     "Please write the student's name with the payment and collect a receipt. If you have already paid, kindly ignore this message.",
-    "",
-    "For any query, call the office on 9352205884.",
   ].join("\n");
 
 const feeDueHi: Body = ([p, s, c, phrase, amount, date, fee]) =>
@@ -78,12 +73,9 @@ const feeDueHi: Body = ([p, s, c, phrase, amount, date, fee]) =>
     "",
     "अंतिम तिथि तक फीस जमा करने पर कोई विलंब शुल्क नहीं लगेगा। उसके बाद उपरोक्त दर से विलंब शुल्क जोड़ा जाएगा।",
     "",
-    "फीस काउंटर पर अथवा इस UPI लिंक से जमा करें:",
-    UPI,
+    "फीस काउंटर पर जमा करें।",
     "",
     "भुगतान करते समय विद्यार्थी का नाम अवश्य लिखें तथा रसीद प्राप्त करें। यदि भुगतान हो चुका है तो इस संदेश को अनदेखा करें।",
-    "",
-    "जानकारी हेतु कार्यालय 9352205884 पर संपर्क करें।",
   ].join("\n");
 
 const balanceEn: Body = ([p, s, c, received, balance, date, fee]) =>
@@ -101,10 +93,7 @@ const balanceEn: Body = ([p, s, c, received, balance, date, fee]) =>
     "",
     "Thank you for the payment received. Clearing the balance by the next date avoids the late fee.",
     "",
-    "Pay at the fee counter or using this UPI link:",
-    UPI,
-    "",
-    "If this differs from your own record, please call the office on 9352205884.",
+    "Pay at the fee counter.",
   ].join("\n");
 
 const balanceHi: Body = ([p, s, c, received, balance, date, fee]) =>
@@ -122,10 +111,7 @@ const balanceHi: Body = ([p, s, c, received, balance, date, fee]) =>
     "",
     "प्राप्त भुगतान के लिए धन्यवाद। शेष राशि अगली तिथि तक जमा करने पर कोई विलंब शुल्क नहीं लगेगा।",
     "",
-    "फीस काउंटर पर अथवा इस UPI लिंक से जमा करें:",
-    UPI,
-    "",
-    "यदि यह विवरण आपके रिकॉर्ड से भिन्न है तो कृपया कार्यालय 9352205884 पर संपर्क करें।",
+    "फीस काउंटर पर जमा करें।",
   ].join("\n");
 
 const prevYearEn: Body = ([p, s, c, session, balance, date, fee]) =>
@@ -145,10 +131,7 @@ const prevYearEn: Body = ([p, s, c, session, balance, date, fee]) =>
     "",
     "This amount is from the previous session and is separate from this year's installments. Please settle it by the date above.",
     "",
-    "Visit the fee counter or use this UPI link:",
-    UPI,
-    "",
-    "For a full statement, call the office on 9352205884.",
+    "Visit the fee counter.",
   ].join("\n");
 
 const prevYearHi: Body = ([p, s, c, session, balance, date, fee]) =>
@@ -166,10 +149,7 @@ const prevYearHi: Body = ([p, s, c, session, balance, date, fee]) =>
     "",
     "यह राशि पिछले सत्र की है और इस वर्ष की किश्तों से अलग है। कृपया उपरोक्त तिथि तक निपटान कर दें।",
     "",
-    "फीस काउंटर पर आएं अथवा इस UPI लिंक का उपयोग करें:",
-    UPI,
-    "",
-    "पूरा विवरण देखने हेतु कार्यालय 9352205884 पर संपर्क करें।",
+    "फीस काउंटर पर आएं।",
   ].join("\n");
 
 /* ---------------------------------------------------------- v3, 2026-09-04 */
@@ -189,12 +169,9 @@ const upcomingEn: Body = ([p, s, c, phrase, amount, date, fee]) =>
     "",
     "The installment above falls due shortly. Paying on or before the last date avoids the late fee.",
     "",
-    "Pay at the school fee counter or using this UPI link:",
-    UPI,
+    "Pay at the school fee counter.",
     "",
     "Please write the student's name with the payment and collect a receipt. If you have already paid, kindly ignore this message.",
-    "",
-    "For any query, call the office on 9352205884.",
   ].join("\n");
 
 const upcomingHi: Body = ([p, s, c, phrase, amount, date, fee]) =>
@@ -212,12 +189,9 @@ const upcomingHi: Body = ([p, s, c, phrase, amount, date, fee]) =>
     "",
     "उपरोक्त किश्त शीघ्र ही देय है। अंतिम तिथि तक फीस जमा करने पर कोई विलंब शुल्क नहीं लगेगा।",
     "",
-    "फीस काउंटर पर अथवा इस UPI लिंक से जमा करें:",
-    UPI,
+    "फीस काउंटर पर जमा करें।",
     "",
     "भुगतान करते समय विद्यार्थी का नाम अवश्य लिखें तथा रसीद प्राप्त करें। यदि भुगतान हो चुका है तो इस संदेश को अनदेखा करें।",
-    "",
-    "जानकारी हेतु कार्यालय 9352205884 पर संपर्क करें।",
   ].join("\n");
 
 /**
@@ -241,12 +215,9 @@ const upcomingFinalEn: Body = ([p, s, c, phrase, amount, date, fee]) =>
     "",
     "Only a few days remain. From the day after the last date shown above, the late fee is added to this account.",
     "",
-    "Settle at the school fee counter or using this UPI link:",
-    UPI,
+    "Settle at the school fee counter.",
     "",
     "Kindly mention the student's name with the payment and take a receipt. Ignore this message if the amount has already been paid.",
-    "",
-    "To confirm your record, call the office on 9352205884.",
   ].join("\n");
 
 const upcomingFinalHi: Body = ([p, s, c, phrase, amount, date, fee]) =>
@@ -264,12 +235,9 @@ const upcomingFinalHi: Body = ([p, s, c, phrase, amount, date, fee]) =>
     "",
     "अब कुछ ही दिन शेष हैं। उपरोक्त अंतिम तिथि के अगले दिन से इस खाते में विलंब शुल्क जोड़ दिया जाएगा।",
     "",
-    "फीस काउंटर पर अथवा इस UPI लिंक से निपटान करें:",
-    UPI,
+    "फीस काउंटर पर निपटान करें।",
     "",
     "भुगतान के साथ विद्यार्थी का नाम अवश्य लिखें तथा रसीद लें। राशि जमा हो चुकी हो तो इस संदेश को अनदेखा करें।",
-    "",
-    "अपना रिकॉर्ड जांचने हेतु कार्यालय 9352205884 पर संपर्क करें।",
   ].join("\n");
 
 /**
@@ -292,12 +260,9 @@ const lateFeeAppliedEn: Body = ([p, s, c, phrase, fees, lateFee, total]) =>
     "",
     "The last date for the installment above has passed, and the late fee shown is now on this account. Please clear the total at the earliest.",
     "",
-    "Pay at the school fee counter or using this UPI link:",
-    UPI,
+    "Pay at the school fee counter.",
     "",
     "Please write the student's name with the payment and collect a receipt. If you have already paid, kindly ignore this message.",
-    "",
-    "For any query, call the office on 9352205884.",
   ].join("\n");
 
 const lateFeeAppliedHi: Body = ([p, s, c, phrase, fees, lateFee, total]) =>
@@ -315,12 +280,9 @@ const lateFeeAppliedHi: Body = ([p, s, c, phrase, fees, lateFee, total]) =>
     "",
     "उपरोक्त किश्त की अंतिम तिथि निकल चुकी है तथा दर्शाया गया विलंब शुल्क इस खाते में जुड़ चुका है। कृपया कुल राशि शीघ्र जमा करें।",
     "",
-    "फीस काउंटर पर अथवा इस UPI लिंक से जमा करें:",
-    UPI,
+    "फीस काउंटर पर जमा करें।",
     "",
     "भुगतान करते समय विद्यार्थी का नाम अवश्य लिखें तथा रसीद प्राप्त करें। यदि भुगतान हो चुका है तो इस संदेश को अनदेखा करें।",
-    "",
-    "जानकारी हेतु कार्यालय 9352205884 पर संपर्क करें।",
   ].join("\n");
 
 /**
@@ -343,12 +305,9 @@ const promiseLapsedEn: Body = ([p, s, c, promised, amount, date, fee]) =>
     "",
     "Our record shows this payment was expected by the date given above and has not reached us. Kindly pay by the new date shown.",
     "",
-    "Pay at the school fee counter or using this UPI link:",
-    UPI,
+    "Pay at the school fee counter.",
     "",
     "If the amount has already been paid, please ignore this message and call the office so the record can be corrected.",
-    "",
-    "For any query, call the office on 9352205884.",
   ].join("\n");
 
 const promiseLapsedHi: Body = ([p, s, c, promised, amount, date, fee]) =>
@@ -366,12 +325,9 @@ const promiseLapsedHi: Body = ([p, s, c, promised, amount, date, fee]) =>
     "",
     "हमारे रिकॉर्ड के अनुसार यह भुगतान उपरोक्त दी गई तिथि तक अपेक्षित था और अब तक प्राप्त नहीं हुआ है। कृपया दर्शाई गई नई तिथि तक जमा करें।",
     "",
-    "फीस काउंटर पर अथवा इस UPI लिंक से जमा करें:",
-    UPI,
+    "फीस काउंटर पर जमा करें।",
     "",
     "यदि राशि जमा हो चुकी है तो इस संदेश को अनदेखा करें तथा रिकॉर्ड सुधार हेतु कार्यालय को सूचित करें।",
-    "",
-    "जानकारी हेतु कार्यालय 9352205884 पर संपर्क करें।",
   ].join("\n");
 
 /* ------------------------------------------------- v4, submitted 2026-09-08 */
@@ -402,12 +358,9 @@ const lateFeeWaiverEn: Body = ([p, s, c, phrase, fees, lateFee, date]) =>
     "",
     "The late fee shown above will not be charged if the fees pending are received on or before the last date shown. From the day after that date, the fees and the late fee are both payable.",
     "",
-    "Pay at the school fee counter or using this UPI link:",
-    UPI,
+    "Pay at the school fee counter.",
     "",
     "Please write the student's name with the payment and collect a receipt. If you have already paid, kindly ignore this message.",
-    "",
-    "For any query, call the office on 9352205884.",
   ].join("\n");
 
 const lateFeeWaiverHi: Body = ([p, s, c, phrase, fees, lateFee, date]) =>
@@ -425,12 +378,9 @@ const lateFeeWaiverHi: Body = ([p, s, c, phrase, fees, lateFee, date]) =>
     "",
     "यदि शेष फीस उपरोक्त अंतिम तिथि तक प्राप्त हो जाती है तो दर्शाया गया विलंब शुल्क नहीं लिया जाएगा। उस तिथि के अगले दिन से फीस और विलंब शुल्क दोनों देय होंगे।",
     "",
-    "फीस काउंटर पर अथवा इस UPI लिंक से जमा करें:",
-    UPI,
+    "फीस काउंटर पर जमा करें।",
     "",
     "भुगतान करते समय विद्यार्थी का नाम अवश्य लिखें तथा रसीद प्राप्त करें। यदि भुगतान हो चुका है तो इस संदेश को अनदेखा करें।",
-    "",
-    "जानकारी हेतु कार्यालय 9352205884 पर संपर्क करें।",
   ].join("\n");
 
 /**
@@ -452,12 +402,9 @@ const waiverLastCallEn: Body = ([p, s, c, phrase, fees, lateFee, date]) =>
     "",
     "The date above is the last date on which the fees pending can be received without the late fee. From the day after, the late fee shown is added to this account. Report cards and examination admit cards are issued only for accounts with no pending fees.",
     "",
-    "Settle at the school fee counter or using this UPI link:",
-    UPI,
+    "Settle at the school fee counter.",
     "",
     "Kindly mention the student's name with the payment and take a receipt. Ignore this message if the amount has already been paid.",
-    "",
-    "To confirm your record, call the office on 9352205884.",
   ].join("\n");
 
 const waiverLastCallHi: Body = ([p, s, c, phrase, fees, lateFee, date]) =>
@@ -475,12 +422,9 @@ const waiverLastCallHi: Body = ([p, s, c, phrase, fees, lateFee, date]) =>
     "",
     "उपरोक्त तिथि शेष फीस को बिना विलंब शुल्क जमा करने की अंतिम तिथि है। उसके अगले दिन से दर्शाया गया विलंब शुल्क इस खाते में जोड़ दिया जाएगा। रिपोर्ट कार्ड एवं परीक्षा प्रवेश पत्र केवल उन्हीं विद्यार्थियों को दिए जाते हैं जिनकी कोई फीस बकाया नहीं है।",
     "",
-    "फीस काउंटर पर अथवा इस UPI लिंक से निपटान करें:",
-    UPI,
+    "फीस काउंटर पर निपटान करें।",
     "",
     "भुगतान के साथ विद्यार्थी का नाम अवश्य लिखें तथा रसीद लें। राशि जमा हो चुकी हो तो इस संदेश को अनदेखा करें।",
-    "",
-    "अपना रिकॉर्ड जांचने हेतु कार्यालय 9352205884 पर संपर्क करें।",
   ].join("\n");
 
 /** A passed installment still unpaid, named with a final date. */
@@ -499,12 +443,9 @@ const overdueFinalEn: Body = ([p, s, c, phrase, amount, date, fee]) =>
     "",
     "The due date for the installment above has passed and the amount remains unpaid. Please clear it by the final date shown. Report cards and examination admit cards are issued only for accounts with no pending fees.",
     "",
-    "Pay at the school fee counter or using this UPI link:",
-    UPI,
+    "Pay at the school fee counter.",
     "",
     "Please write the student's name with the payment and collect a receipt. If you have already paid, kindly ignore this message.",
-    "",
-    "For any query, call the office on 9352205884.",
   ].join("\n");
 
 const overdueFinalHi: Body = ([p, s, c, phrase, amount, date, fee]) =>
@@ -522,12 +463,9 @@ const overdueFinalHi: Body = ([p, s, c, phrase, amount, date, fee]) =>
     "",
     "उपरोक्त किश्त की देय तिथि निकल चुकी है और राशि अब तक जमा नहीं हुई है। कृपया दर्शाई गई अंतिम तिथि तक जमा करें। रिपोर्ट कार्ड एवं परीक्षा प्रवेश पत्र केवल उन्हीं विद्यार्थियों को दिए जाते हैं जिनकी कोई फीस बकाया नहीं है।",
     "",
-    "फीस काउंटर पर अथवा इस UPI लिंक से जमा करें:",
-    UPI,
+    "फीस काउंटर पर जमा करें।",
     "",
     "भुगतान करते समय विद्यार्थी का नाम अवश्य लिखें तथा रसीद प्राप्त करें। यदि भुगतान हो चुका है तो इस संदेश को अनदेखा करें।",
-    "",
-    "जानकारी हेतु कार्यालय 9352205884 पर संपर्क करें।",
   ].join("\n");
 
 /**
@@ -550,12 +488,9 @@ const promiseDueEn: Body = ([p, s, c, spoken, amount, agreed, fee]) =>
     "",
     "Our record shows that on the date above you agreed to pay the amount pending by the date shown. Kindly pay on or before that date.",
     "",
-    "Pay at the school fee counter or using this UPI link:",
-    UPI,
+    "Pay at the school fee counter.",
     "",
     "If the amount has already been paid, please ignore this message and call the office so the record can be corrected.",
-    "",
-    "For any query, call the office on 9352205884.",
   ].join("\n");
 
 const promiseDueHi: Body = ([p, s, c, spoken, amount, agreed, fee]) =>
@@ -573,12 +508,9 @@ const promiseDueHi: Body = ([p, s, c, spoken, amount, agreed, fee]) =>
     "",
     "हमारे रिकॉर्ड के अनुसार उपरोक्त बातचीत की तिथि को आपने शेष राशि तय की गई तिथि तक जमा करने की सहमति दी थी। कृपया उस तिथि तक जमा कर दें।",
     "",
-    "फीस काउंटर पर अथवा इस UPI लिंक से जमा करें:",
-    UPI,
+    "फीस काउंटर पर जमा करें।",
     "",
     "यदि राशि जमा हो चुकी है तो इस संदेश को अनदेखा करें तथा रिकॉर्ड सुधार हेतु कार्यालय को सूचित करें।",
-    "",
-    "जानकारी हेतु कार्यालय 9352205884 पर संपर्क करें।",
   ].join("\n");
 
 /** Anything pending on the selected installments, before the examinations. */
@@ -597,12 +529,9 @@ const examClearanceEn: Body = ([p, s, c, phrase, amount, date, fee]) =>
     "",
     "Examinations are approaching. Report cards and examination admit cards are issued only for accounts with no pending fees, so please clear the amount above by the date shown.",
     "",
-    "Pay at the school fee counter or using this UPI link:",
-    UPI,
+    "Pay at the school fee counter.",
     "",
     "Please write the student's name with the payment and collect a receipt. If you have already paid, kindly ignore this message.",
-    "",
-    "For any query, call the office on 9352205884.",
   ].join("\n");
 
 const examClearanceHi: Body = ([p, s, c, phrase, amount, date, fee]) =>
@@ -620,12 +549,9 @@ const examClearanceHi: Body = ([p, s, c, phrase, amount, date, fee]) =>
     "",
     "परीक्षाएँ निकट हैं। रिपोर्ट कार्ड एवं परीक्षा प्रवेश पत्र केवल उन्हीं विद्यार्थियों को दिए जाते हैं जिनकी कोई फीस बकाया नहीं है, अतः कृपया उपरोक्त राशि दर्शाई गई तिथि तक जमा करें।",
     "",
-    "फीस काउंटर पर अथवा इस UPI लिंक से जमा करें:",
-    UPI,
+    "फीस काउंटर पर जमा करें।",
     "",
     "भुगतान करते समय विद्यार्थी का नाम अवश्य लिखें तथा रसीद प्राप्त करें। यदि भुगतान हो चुका है तो इस संदेश को अनदेखा करें।",
-    "",
-    "जानकारी हेतु कार्यालय 9352205884 पर संपर्क करें।",
   ].join("\n");
 
 /* -------------------------------------------------------------------- lookup */

@@ -40,7 +40,7 @@ function send(overrides: Partial<SendRowForMatching> = {}): SendRowForMatching {
   return {
     id: "s1",
     providerMessageId: "msg-1",
-    destinationDigits: "",
+    destinationDigits: "9123456780",
     sentOn: "2026-09-03",
     status: "sent",
     currentDeliveryStatus: null,
@@ -84,10 +84,10 @@ describe("readDeliveryStatus", () => {
 
 describe("phoneDigits", () => {
   it.each([
-    ["+91 93522 05884", ""],
-    ["919352205884", ""],
-    ["", ""],
-    ["+919352205884", ""],
+    ["+91 98765 43210", "9876543210"],
+    ["919876543210", "9876543210"],
+    ["9876543210", "9876543210"],
+    ["+919876543210", "9876543210"],
   ])("reduces %s to %s", (input, expected) => {
     // The country code is not always in the file even when it is on the row we
     // stored, so the last ten digits are the only reliable key.
@@ -117,7 +117,7 @@ describe("splitCsvLine", () => {
 describe("parseDeliveryReport", () => {
   const CSV = [
     "Message Id,Destination,Status,Updated At",
-    "msg-1,+919352205884,Delivered,2026-09-03T10:15:00Z",
+    "msg-1,+919123456780,Delivered,2026-09-03T10:15:00Z",
     "msg-2,+919876543210,Read,2026-09-03T11:00:00Z",
     "msg-3,+919111111111,Failed,2026-09-03T10:20:00Z",
   ].join("\n");
@@ -128,7 +128,7 @@ describe("parseDeliveryReport", () => {
     expect(parsed.rows).toHaveLength(3);
     expect(parsed.rows[0]).toEqual({
       providerMessageId: "msg-1",
-      destinationDigits: "",
+      destinationDigits: "9123456780",
       status: "delivered",
       at: "2026-09-03T10:15:00.000Z",
     });
@@ -139,7 +139,7 @@ describe("parseDeliveryReport", () => {
     // a whole import into zero rows with no error.
     const renamed = [
       "campaign,msg id,mobile number,delivery state,timestamp",
-      "vpps_app_fee_due_hi_v2,msg-9,919352205884,delivered,2026-09-03",
+      "vpps_app_fee_due_hi_v2,msg-9,919123456780,delivered,2026-09-03",
     ].join("\n");
     const parsed = parseDeliveryReport(renamed);
     expect(parsed.error).toBeNull();
@@ -157,7 +157,7 @@ describe("parseDeliveryReport", () => {
   it("counts rows it could not read rather than dropping them silently", () => {
     const messy = [
       "Message Id,Destination,Status",
-      "msg-1,+919352205884,Delivered",
+      "msg-1,+919123456780,Delivered",
       ",,,",
       "msg-2,+919876543210,who-knows",
     ].join("\n");
@@ -217,7 +217,7 @@ describe("matchDeliveryReport", () => {
       [
         {
           providerMessageId: null,
-          destinationDigits: "",
+          destinationDigits: "9123456780",
           status: "read",
           at: "2026-09-03T10:00:00.000Z",
         },
@@ -234,7 +234,7 @@ describe("matchDeliveryReport", () => {
       [
         {
           providerMessageId: null,
-          destinationDigits: "",
+          destinationDigits: "9123456780",
           status: "read",
           at: "2026-09-03T10:00:00.000Z",
         },
@@ -304,7 +304,7 @@ describe("the failure reason, kept since 2026-10-30", () => {
     const parsed = parseDeliveryReport(
       [
         "Message Id,Destination,Status,Failure Reason,Error Code,Updated At",
-        "msg-1,+919352205884,Failed,Message undeliverable,131026,2026-10-29T10:15:00Z",
+        "msg-1,+919123456780,Failed,Message undeliverable,131026,2026-10-29T10:15:00Z",
         "msg-2,+919876543210,Delivered,,,2026-10-29T10:16:00Z",
       ].join("\n"),
     );
@@ -320,7 +320,7 @@ describe("the failure reason, kept since 2026-10-30", () => {
 
   it("pulls the code out of the reason when the report has no code column", () => {
     const parsed = parseDeliveryReport(
-      ["msg id,mobile,status,error", "msg-1,9352205884,undelivered,(#131049) ecosystem engagement"].join("\n"),
+      ["msg id,mobile,status,error", "msg-1,9123456780,undelivered,(#131049) ecosystem engagement"].join("\n"),
     );
     expect(parsed.rows[0]).toMatchObject({ status: "failed", errorCode: "131049" });
   });
@@ -338,7 +338,7 @@ describe("the failure reason, kept since 2026-10-30", () => {
     // "failed" carries the OLD id, which matches nothing — and must not then
     // fall back to the phone and mark the resend failed.
     const result = matchDeliveryReport(
-      [{ providerMessageId: "msg-old", destinationDigits: "", status: "failed", at: "2026-09-03T10:00:00.000Z" }],
+      [{ providerMessageId: "msg-old", destinationDigits: "9123456780", status: "failed", at: "2026-09-03T10:00:00.000Z" }],
       [send({ providerMessageId: "msg-new" })],
     );
     expect(result.updates).toEqual([]);

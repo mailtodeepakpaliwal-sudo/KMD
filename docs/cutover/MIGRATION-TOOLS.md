@@ -449,7 +449,7 @@ Phase 10 row of `docs/PROGRESS.md`):
 ## `health.mjs` — the health pack in a terminal (Phase G)
 
 ```
-npm run migrate:health -- [--hours 24] [--json] [--probe https://one.vpps.co.in]
+npm run migrate:health -- [--hours 24] [--json] [--probe https://one.kmd-school.example]
 ```
 
 Plan §9.1, critique1 B9. Reads `vppsone.ops_health_counts()` (counts only;

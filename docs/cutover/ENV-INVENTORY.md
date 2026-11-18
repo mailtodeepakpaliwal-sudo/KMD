@@ -49,9 +49,10 @@ Coexistence supersedes the historical C5 provider-copy notes below: Fees retains
 | `NEXT_PUBLIC_SCHOOL_ADDRESS` | `src/platform/config/school.ts`, `src/vx/screens/settings/data.ts` | `src/platform/config/school.ts` | — | yes | copy the fees Production value (owner) | add at C5 — receipt header |
 | `NEXT_PUBLIC_SCHOOL_EMAIL` | `src/platform/config/school.ts` | `src/platform/config/school.ts` | — | yes | copy the fees Production value (owner) | add at C5 — receipt header |
 | `NEXT_PUBLIC_SCHOOL_NAME` | `src/platform/config/school.ts`, `src/platform/env.ts` +1 | `src/platform/config/school.ts` | yes | yes | fees Production value (owner) | set |
-| `NEXT_PUBLIC_SCHOOL_PHONE` | `src/platform/config/school.ts`, `src/vx/screens/settings/data.ts` | `src/platform/config/school.ts` | — | yes | copy the fees Production value (owner) | add at C5 — receipt header (critique1 B6) |
+| `NEXT_PUBLIC_SCHOOL_PHONE` | `src/platform/config/school.ts`, `src/vx/screens/settings/data.ts` | `src/platform/config/school.ts` | — | yes | copy the fees Production value (owner) | add at C5 — receipt header (critique1 B6); also the office number in WhatsApp messages, left out while unset |
+| `NEXT_PUBLIC_SCHOOL_UPI_ID` | `src/modules/payments/domain/upi.ts` | — | — | — | owner | add when KMD has its own UPI ID — unset, no UPI QR or pay link is drawn anywhere (the old school's ID was removed 18 Nov 2026) |
 | `NEXT_PUBLIC_SENTRY_DSN` | — | `next.config.ts`, `src/instrumentation-client.ts` +3 | yes | yes | owner | set on both projects; which Sentry project One's copy names is NOT recorded (owner: write the project name here). One's code does not read it, so One's errors never land in the fees project by accident |
-| `NEXT_PUBLIC_SITE_URL` | `src/platform/env.ts`, `src/vx/screens/exams/data.ts` | `src/modules/payments/data/online/staff-alerts.ts`, `src/platform/env.ts` | yes | yes | owner | set — `https://one.vpps.co.in` |
+| `NEXT_PUBLIC_SITE_URL` | `src/platform/env.ts`, `src/vx/screens/exams/data.ts` | `src/modules/payments/data/online/staff-alerts.ts`, `src/platform/env.ts` | yes | yes | owner | set — `https://one.kmd-school.example` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | — | — | — | yes | fees | fees only — One uses the publishable key |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `src/modules/fees/platform/supabase/client.ts`, `src/modules/fees/platform/supabase/server.ts` +5 | `src/platform/env.ts`, `src/platform/supabase/client.ts` +2 | yes | yes | Supabase wtgx → API keys (owner) | set — wtgx's key |
 | `NEXT_PUBLIC_SUPABASE_URL` | `src/modules/fees/platform/supabase/client.ts`, `src/platform/auth/dayrun-server.ts` +4 | `src/modules/one-bridge/data/auth.ts`, `src/platform/env.ts` +5 | yes | yes | Supabase wtgx → Settings → API (owner) | set — keep wtgx (D-338); never the fees URL |
@@ -155,7 +156,7 @@ Cloudflare wrangler vars and secrets of `schoolfees-live-mcp`. Fees remains live
 - `APP_MODE`: add at C5: `production` — required together with VPPSONE_ENV=live (`getFeeSchema()` throws otherwise)
 - `NEXT_PUBLIC_SCHOOL_ADDRESS`: add at C5 — receipt header
 - `NEXT_PUBLIC_SCHOOL_EMAIL`: add at C5 — receipt header
-- `NEXT_PUBLIC_SCHOOL_PHONE`: add at C5 — receipt header (critique1 B6)
+- `NEXT_PUBLIC_SCHOOL_PHONE`: add at C5 — receipt header (critique1 B6); also the office number in WhatsApp messages, left out while unset
 - `QA_LOGIN_KEY`: keep, ROTATE at T0 — the plan said remove (§9.3), the owner override of 30 Oct (D-346) keeps QA sign-in on production for test accounts only; testing happens in production under TEST-2026-27
 - `RAZORPAY_ACCOUNT_ID`: add at C5 — events for any other account are ignored
 - `RAZORPAY_KEY_ID`: add at C5 (`rzp_live_` counts only with VERCEL_ENV=production and VPPSONE_ENV=live)

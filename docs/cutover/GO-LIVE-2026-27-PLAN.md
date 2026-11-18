@@ -86,7 +86,7 @@ What changes in the phases:
   named triggers switched off for that statement only.
 - **Phase 2 loads real data into this project's `public`.** It replaces the
   masked replica, and the `vppsone.data_replica` marker is updated.
-  - one.vpps.co.in already serves this database. So the order is fixed:
+  - one.kmd-school.example already serves this database. So the order is fixed:
     1. lockdown (Phase 1);
     2. TEST visibility (Phase 3);
     3. quarantine (Phase 4);
@@ -117,7 +117,7 @@ AiSensy, staff WhatsApp, cutover, rollback) holds as written.
 ## 1. Rules that hold for the whole migration
 
 **I-1. The fees app's code, Vercel project and env never change.**
-- `fees.vpps.co.in`, `schoolfees-two.vercel.app` and `vpps-one.vercel.app`
+- `fees.kmd-school.example`, `schoolfees-two.vercel.app` and `vpps-one.vercel.app`
   keep serving it (D-337).
 
 **I-2. Migration tooling never writes to the live fee database.**
@@ -175,7 +175,7 @@ AiSensy, staff WhatsApp, cutover, rollback) holds as written.
 | | Ref | What it holds |
 |---|---|---|
 | Fees live | `vgqyilgstjvgohrsiwkb` | The real data. Postgres 17.6, ap-south-1. Has all 11 fee migrations of 26–30 Oct (online payments, `_v6` reminders). No `vppsone` schema. |
-| Dev | `wtgxcptmucjerhufzjcf` | A masked copy of live from 22 Sep, plus One's `vppsone` schema and all of One's test and QA activity. one.vpps.co.in runs on it today. Its fee schema is 11 migrations behind live. |
+| Dev | `wtgxcptmucjerhufzjcf` | A masked copy of live from 22 Sep, plus One's `vppsone` schema and all of One's test and QA activity. one.kmd-school.example runs on it today. Its fee schema is 11 migrations behind live. |
 
 **Live control totals for 2026-27** (fees MCP, 30 Oct 09:44Z). The copy must
 match these exactly at the moment it is taken.
@@ -216,7 +216,7 @@ student and class ids **equal live ids**. Copying dev rows across as they
 are would attach test attendance and marks to real children.
 
 **Open fact to settle first.** D-334 and D-335 suggest real staff already
-use one.vpps.co.in, for example office document uploads to Drive. Any real
+use one.kmd-school.example, for example office document uploads to Drive. Any real
 activity on dev has to be found and kept (Phase 4, Q12).
 
 ---
@@ -696,7 +696,7 @@ is the new project only)
 - Documents: metadata only, unless the owner wants the files (Q12).
 
 **4.4 Real activity on dev.** If real staff have been using
-one.vpps.co.in, the owner names which dev activity is real (Q12):
+one.kmd-school.example, the owner names which dev activity is real (Q12):
 - Real activity is promoted, not quarantined.
 - Before C1, dev goes read-only (a maintenance flag). Classify, quarantine
   and promote then run again inside the freeze.
@@ -805,7 +805,7 @@ Each one gets a `begin … rollback` dry-run script and a fingerprint entry.
   English, so 22 templates.
   - The `_v6` buttons are fixed by Meta to `schoolfees-two.vercel.app/pay/`.
   - `_v7` keeps **exactly the `_v6` parameter layout**; only the host
-    changes to `one.vpps.co.in/pay/`.
+    changes to `one.kmd-school.example/pay/`.
   - A unit test checks the parameter count for each situation against
     `APPROVED_V7`.
 - One never sends `_v6`. If `_v7` is not yet approved, the text-only form
@@ -1092,7 +1092,7 @@ WhatsApp to the owner. It watches:
 - Remove `QA_LOGIN_KEY`.
 
 **9.4 Auth on the new project**
-- Site URL and redirect `https://one.vpps.co.in/**`.
+- Site URL and redirect `https://one.kmd-school.example/**`.
 - SMTP with SPF and DKIM for `vpps.co.in`, and Hindi and English email
   templates.
 - The new project has a new JWT secret, so every staff member signs in
@@ -1168,8 +1168,8 @@ accountant attends rehearsal 2 and signs the route sheet.
 | C9 | Sun 14:00 | Go. `parent_dispatch=true` for receipts only. No reminder run on T0 or T0+1 |
 
 **Links**
-- No DNS change: one.vpps.co.in already serves One.
-- One's links to fees.vpps.co.in become links to One's own fee screens.
+- No DNS change: one.kmd-school.example already serves One.
+- One's links to fees.kmd-school.example become links to One's own fee screens.
 - An admin-only "Fees app (read-only)" link stays for the parallel run.
 
 **Training (T-7 to T-2)**
@@ -1215,7 +1215,7 @@ Steps:
    `parent_dispatch` and `staff_notice_dispatch`.
 2. Remove One's pg_cron jobs and Vercel crons.
 3. Disable One's Razorpay webhook.
-4. The desk goes back to fees.vpps.co.in.
+4. The desk goes back to fees.kmd-school.example.
 5. `rollback-export.mjs`, driven by One's `audit_logs`, lists every fee
    change since the watermark, not only receipts:
    - waivers, write-offs, reversals and refunds
@@ -1279,7 +1279,7 @@ Steps:
   `fee_policy_configs`: live SELECTs were refused in this session.
 - The overlap of dev and live student ids. It is inferred from
   `replicate-live.mjs:295-330`; confirm with a count.
-- Whether real staff already use one.vpps.co.in (§4.4).
+- Whether real staff already use one.kmd-school.example (§4.4).
 - The trigger-disable and fixed-UUID auth inserts on Supabase (rehearsal 1).
 - The Vercel team plan.
 - The fees desk's list of payment modes. It comes from the mapping notes;
@@ -1342,7 +1342,7 @@ Steps:
 **Needed before Phases 4, 6 and 8**
 
 12. **Test data.**
-    - Which activity on one.vpps.co.in is real staff work?
+    - Which activity on one.kmd-school.example is real staff work?
     - Keep One's dev history in TEST at all?
     - Copy the documents, or metadata only?
     - Where does the 20th dev class go?
@@ -1354,7 +1354,7 @@ Steps:
     - May `assist` read real data?
 14. **Online payments.** All families straight after the ₹100 test, or an
     opt-in pilot first? Also apply for Razorpay website approval of
-    `one.vpps.co.in` now?
+    `one.kmd-school.example` now?
 15. **Staff WhatsApp.**
     - Which events?
     - What monthly budget?

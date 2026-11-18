@@ -25,7 +25,7 @@ $$;
 -- The nightly `?verify=1` run below is a complete sync on its own.
 select cron.schedule('fees-bridge-nightly-verify','30 20 * * *',$cron$
   select net.http_post(
-    url:='https://one.vpps.co.in/api/jobs/fees-bridge-sync?verify=1',
+    url:='https://one.kmd-school.example/api/jobs/fees-bridge-sync?verify=1',
     headers:=jsonb_build_object('Content-Type','application/json','Authorization',
       'Bearer '||(select decrypted_secret from vault.decrypted_secrets where name='FEES_BRIDGE_CRON_SECRET')),
     body:='{}'::jsonb,timeout_milliseconds:=110000);

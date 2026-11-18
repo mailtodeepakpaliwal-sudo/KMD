@@ -7,7 +7,7 @@ import QRCode from "qrcode";
 import { schoolProfile } from "@/platform/config/school";
 import { formatInr } from "@/platform/helpers/currency";
 import { formatMediumDate } from "@/platform/helpers/date";
-import { buildStudentFeeUpiPayment } from "@/modules/payments/domain/upi";
+import { buildStudentFeeUpiPayment, schoolUpiConfigured } from "@/modules/payments/domain/upi";
 import { buildOpenSchoolUpiPayment } from "@/modules/payments/domain/upi-open";
 import { createAdminClient } from "@/modules/fees/platform/supabase/admin";
 import { isMissingColumn } from "@/platform/supabase/missing-column";
@@ -243,7 +243,7 @@ export default async function PayPage({ params, searchParams }: PayPageProps) {
           title="Pay school fees by UPI"
           note={
             <>
-              This link does not carry an amount. Enter the amount from your WhatsApp message.
+              This link does not carry an amount.{schoolUpiConfigured() ? " Enter the amount from your WhatsApp message." : ""}
               {officeLine}
             </>
           }
@@ -266,7 +266,7 @@ export default async function PayPage({ params, searchParams }: PayPageProps) {
           note={
             <>
               It was valid until {formatMediumDate(result.expiredOn)}, and the amount may have
-              changed since. You can still pay by UPI below.
+              changed since.{schoolUpiConfigured() ? " You can still pay by UPI below." : ""}
               {officeLine}
             </>
           }
@@ -295,8 +295,8 @@ export default async function PayPage({ params, searchParams }: PayPageProps) {
 
 /**
  * The school's UPI QR for THIS payment — the same account as the QR printed at
- * the fee counter (HDFC, `shriveerpattassecsch.68347408@hdfcbank`, decoded and
- * checked against `SCHOOL_UPI_PAYMENT_CONFIG` on 2026-10-26), but carrying the
+ * the fee counter (`SCHOOL_UPI_PAYMENT_CONFIG`, from `NEXT_PUBLIC_SCHOOL_UPI_ID`;
+ * not drawn at all until that is set), but carrying the
  * amount and the admission-number reference, so the parent cannot pay the
  * wrong figure and the office can match the payment.
  *
@@ -315,7 +315,32 @@ async function paymentQr(uri: string): Promise<{ svg: string; png: string } | nu
   }
 }
 
+/**
+ * What the page offers while the school has no UPI ID of its own set
+ * (`schoolUpiConfigured()`, 18 Nov 2026): the counter, and the amount when the
+ * link carries one. Never a QR or UPI ID that could pay someone else.
+ */
+function CounterPanel({ title, amount, note }: { title: string; amount?: number; note?: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
+      <div className="text-center">
+        <h2 className="text-sm font-bold text-foreground">{title}</h2>
+        {amount !== undefined ? (
+          <p className="mt-1 text-3xl font-bold tabular-nums text-foreground">{formatInr(amount)}</p>
+        ) : null}
+        {note ? <p className="mt-2 text-sm text-muted-foreground">{note}</p> : null}
+      </div>
+      <p className="rounded-lg border border-border bg-surface-2 p-3 text-center text-sm text-foreground">
+        Please pay at the school fee counter and collect a receipt.
+      </p>
+    </section>
+  );
+}
+
 async function PayPanel({ result }: { result: Extract<PayResult, { state: "ready" }> }) {
+  if (!schoolUpiConfigured()) {
+    return <CounterPanel title="Amount due" amount={result.amount} />;
+  }
   const payment = buildStudentFeeUpiPayment({
     amount: result.amount,
     admissionNo: result.reference,
@@ -380,6 +405,9 @@ async function PayPanel({ result }: { result: Extract<PayResult, { state: "ready
  * name, because there is no admission number to put there.
  */
 async function OpenPayPanel({ title, note }: { title: string; note: ReactNode }) {
+  if (!schoolUpiConfigured()) {
+    return <CounterPanel title={title.replace(" by UPI", "")} note={note} />;
+  }
   const payment = buildOpenSchoolUpiPayment();
   const qr = await paymentQr(payment.uri);
 

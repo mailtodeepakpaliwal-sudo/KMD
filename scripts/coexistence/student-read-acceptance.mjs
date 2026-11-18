@@ -7,8 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateAcceptanceConfig } from './acceptance.mjs';
 
-const FEES='https://fees.vpps.co.in';
-const ONE='https://one.vpps.co.in';
+const FEES='https://fees.kmd-school.example';
+const ONE='https://one.kmd-school.example';
 const AUTH='https://uvvusynovvhtacauvrzc.supabase.co';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const need=(value,code)=>{if(!value)throw new Error(code);};

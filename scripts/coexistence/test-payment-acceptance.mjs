@@ -11,7 +11,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomUUID} from 'node:crypto';
 import {atomicPrivateJson} from './atomic-private-json.mjs';
-const FEES='https://fees.vpps.co.in';
+const FEES='https://fees.kmd-school.example';
 const AUTH='https://uvvusynovvhtacauvrzc.supabase.co';
 const SESSION='TEST-2026-27';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

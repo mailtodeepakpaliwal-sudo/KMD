@@ -25,7 +25,8 @@ describe("each file says why it differs from the fees app", () => {
     ["floor", floor],
     ["switches", switches],
   ])("%s", (_name, source) => {
-    expect(source.startsWith("-- ============================================================================\n-- KMD One fee-migration (One-only)")).toBe(true);
+    // Written as "VPPS One" before the KMD conversion; applied files are not edited.
+    expect(source).toMatch(/^-- =+\n-- (?:KMD|VPPS) One fee-migration \(One-only\)/);
     expect(source).toContain("Why this differs from the fees app");
   });
 });

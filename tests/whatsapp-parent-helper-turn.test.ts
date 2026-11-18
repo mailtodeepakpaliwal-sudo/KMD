@@ -28,6 +28,7 @@ import type { HelperAnswer } from "@/modules/whatsapp/domain/helper-ai";
 import { NO_KNOWLEDGE, type LessonNote, type SchoolKnowledge } from "@/modules/whatsapp/domain/helper-lessons";
 import { childFactsFromRow, type ChildFacts } from "@/modules/whatsapp/domain/helper-facts";
 import { EMPTY_CHAT, type ChatPatch, type ChatState } from "@/modules/whatsapp/domain/helper-plan";
+import { officeNumber } from "@/modules/whatsapp/domain/helper-replies";
 import type { VisitCalendar } from "@/modules/whatsapp/domain/helper-visit";
 import type { WhatsAppConfig } from "@/platform/whatsapp/config";
 import type { WhatsAppSwitches } from "@/platform/whatsapp/policy";
@@ -661,7 +662,7 @@ describe("did this answer help? (D-584)", () => {
   it.each([
     ["already", "rating_already", "that is already noted"],
     ["already_passed_on", "rating_passed_already", "The school office already has your question"],
-    ["not_saved", "rating_not_saved", "It could not be passed on just now. Please call the office: 9352205884"],
+    ["not_saved", "rating_not_saved", `It could not be passed on just now. Please call the office${officeNumber("en")}`],
   ] as const)("%s: answered as %s, and nothing new is written", async (outcome, intent, words) => {
     const openHandoff = vi.fn(async () => undefined);
     const rateAnswer = vi.fn(async (): Promise<RateResult> => ({ outcome, handoff: { ...ANSWERED, language: "en" } }));
@@ -693,7 +694,7 @@ describe("did this answer help? (D-584)", () => {
       insertHandoff: async () => null,
     });
     expect(await runHelperTurn(rateTap(`vpai:not_helped:${KEY}`), deps)).toMatchObject({ outcome: "answered", intent: "rating_not_saved", handoff: null });
-    expect(bodyText(calls.sent[0])).toContain("Please call the office: 9352205884");
+    expect(bodyText(calls.sent[0])).toContain(`Please call the office${officeNumber("en")}`);
     expect(calls.finished[0]![1]).toMatchObject({ reason: "handoff_not_saved", parentReplyId: null });
     expect(openHandoff).not.toHaveBeenCalled();
   });

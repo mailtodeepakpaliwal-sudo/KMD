@@ -13,6 +13,7 @@ import {
   handoffFailedReply,
   modeText,
   OFFICE_PHONE,
+  officeNumber,
   ratingQuestion,
   ratingReply,
   receiptsCard,
@@ -315,7 +316,7 @@ describe("did this answer help? (D-584)", () => {
     expect(en("passed_on")).toBe("🙏 Sorry that did not help. Your question and this answer have been passed to the school office, and they will answer you here.");
     expect(en("passed_on", true)).toContain("🌙 It is late now, so it will be seen after 6 am.");
     expect(en("already_passed_on")).toContain("already has your question");
-    expect(en("not_passed_on")).toBe(`Sorry that did not help 🙏 It could not be passed on just now. Please call the office: ${OFFICE_PHONE}`);
+    expect(en("not_passed_on")).toBe(`Sorry that did not help 🙏 It could not be passed on just now. Please call the office${officeNumber("en")}`);
     expect(en("not_passed_on", true)).not.toContain("🌙");
     expect(en("ask_office")).toContain("Tap *Talk to office* below");
     expect(buttonsOf(ratingReply(context("en"), "ask_office", false)).map((button) => button.id)).toEqual(["vpai:office", "vpai:menu"]);

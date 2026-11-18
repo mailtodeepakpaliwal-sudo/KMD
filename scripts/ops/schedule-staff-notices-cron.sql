@@ -28,7 +28,7 @@
 --        VPPS_FEE_DAY_SUMMARY_JOB_TOKEN      for 'fee-day-summary'
 --        VPPS_FEE_DAY_NOT_CLOSED_JOB_TOKEN   for 'fee-day-not-closed'
 --      e.g. select vault.create_secret('<token>', 'VPPS_STAFF_NOTICES_JOB_TOKEN');
---   3. The site answers at https://one.vpps.co.in.
+--   3. The site answers at https://one.kmd-school.example.
 --
 -- Idempotent: each job is unscheduled by name if it exists, then scheduled
 -- again. The tokens are read from Vault when each job fires, so rotating a
@@ -83,7 +83,7 @@ begin
       v_job.schedule,
       format(
         $cmd$select net.http_get(
-  url := 'https://one.vpps.co.in/api/jobs/%s?token=' ||
+  url := 'https://one.kmd-school.example/api/jobs/%s?token=' ||
     (select decrypted_secret from vault.decrypted_secrets where name = %L),
   timeout_milliseconds := 55000
 );$cmd$,

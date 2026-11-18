@@ -35,7 +35,7 @@ says what kind of check exists.
 | **One-prod** | `dpl_8x7BSjdNoNMz9TFuQmQowcsQ1Zma` at `eb9631e8` | Every merged One PR below |
 | **Fees-prod** | `dpl_2c62oJTDoC6gWuE9dJCrG6w8GzGm` at `4079ff00` | Fees #135 and #137 |
 
-**Live checks.** Every live check was made on 3–4 Nov on one.vpps.co.in, in
+**Live checks.** Every live check was made on 3–4 Nov on one.kmd-school.example, in
 desktop Chrome, signed in as an admin, and measured timings only. None created
 a record or sent a message. No other limits apply to these checks:
 
@@ -173,7 +173,7 @@ per-staff limits bound how much of that capacity they can take.
 - **Claude:**
   1. In Claude, open Settings → Connectors.
   2. Choose Add custom connector.
-  3. Paste `https://one.vpps.co.in/api/mcp`.
+  3. Paste `https://one.kmd-school.example/api/mcp`.
   4. Claude opens One. Sign in with your own One account and approve.
 
   The feasibility doc (C3) recorded the web path as *Customize › Connectors* on

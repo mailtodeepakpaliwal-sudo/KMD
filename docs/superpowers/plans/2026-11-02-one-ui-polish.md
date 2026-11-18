@@ -58,4 +58,4 @@ Expected: no horizontal document overflow or obscured navigation; mobile starts 
 - [ ] Wait for required CI, merge and inspect production deployment state/SHA/alias.
 - [ ] Recheck the shared live browser at mobile and desktop width and restore its temporary viewport override.
 
-Expected: CI passes and `one.vpps.co.in` serves the merged revision; report any unverified scope explicitly.
+Expected: CI passes and `one.kmd-school.example` serves the merged revision; report any unverified scope explicitly.

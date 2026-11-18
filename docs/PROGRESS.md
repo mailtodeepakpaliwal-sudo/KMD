@@ -723,7 +723,7 @@ the new screen at the very top (`window.scrollTo(0, 0)` and `scroll: false`):
 left to itself the router scrolled the new screen's own top into view and hid
 the banner above it. On the branch preview the teacher's screen showed in 3.7
 seconds instead of 7.9, with one load. **Live** from about 19:29 UTC (One PR
-318, merge `2a2072e`): on one.vpps.co.in at phone width the banner showed 2.3 s
+318, merge `2a2072e`): on one.kmd-school.example at phone width the banner showed 2.3 s
 after the tap and the teacher's screen 4.0 s (7.9 before), one `GET /teach`,
 at `scrollY` 0; Back to my view 3.3 s. **BrowserStack, live:** real Samsung
 Galaxy M32 (Chrome) — picker, See as from far down the list landing at the top
@@ -802,7 +802,7 @@ and her requests on Today, drawn on the server so the teacher's first screen
 carries no extra JavaScript (the /teach/attendance budget had only bytes to
 spare). Migrations `…_certificate_requests.sql` and
 `…_certificate_requests_role_permissions.sql`; PGlite test in CI. **Checked
-live** (one.vpps.co.in, TEST-2026-27, QA teacher2 on a phone-sized window and
+live** (one.kmd-school.example, TEST-2026-27, QA teacher2 on a phone-sized window and
 QA admin on a desk): two asks from a child's page, both in "Asked by
 teachers", Approve and sign made `TEST/VPPS/STUDY/TEST-2026-27/0001` in about
 4 s, a decline reached the teacher with its reason, her Today card drew in
@@ -849,7 +849,7 @@ menu load with chunks only a desk asks for. Tests:
 **Remains:** Collect (`/payments`) keeps its narrow desk card; it is the
 money flow and was left as it is.
 **Live (same evening):** PR 305 merged as `4b89f0c4`, deployed 18:13 UTC.
-Checked on one.vpps.co.in in one browser at 1366, 1920, 1100 and a 390 phone
+Checked on one.kmd-school.example in one browser at 1366, 1920, 1100 and a 390 phone
 (no sideways scroll, no page errors) and on BrowserStack: Windows 11 Chrome
 about 1250 wide (Today's money under the teaching cards, "+ New" with its
 hints, the menu's fade and "More below" chip, Students with every button in
@@ -933,7 +933,7 @@ suite passes except `tests/sentry-lite.test.ts`, which fails only in a
 checkout under `/home/user` (the path contains "user").
 **Remains:** teachers see real-year photos after the first "Refresh roster
 now" by an admin; the copy is not automatic (owner's choice).
-**Live:** merged as PR 295 (`92036b2`), on one.vpps.co.in from 15:09 UTC.
+**Live:** merged as PR 295 (`92036b2`), on one.kmd-school.example from 15:09 UTC.
 Checked live as QA admin and QA teacher in a container browser (a drawn test
 photo on one TEST child shows in New note on phone and desk; initials where
 there is none; tab lit within 0.12 s; "Opening…" on a slow page) and on
@@ -941,7 +941,7 @@ BrowserStack (real Galaxy M32 Chrome and Windows 11 Chrome): all passed but
 the year picker's words, which D-517 fixes (desk heading still "Test / UAT /
 DEMO", phone sheet Hindi-only for a both-languages reader). Same branch,
 restarted from main after the merge.
-**D-517 live:** merged as PR 296 (`bf71816`), on one.vpps.co.in from 15:56
+**D-517 live:** merged as PR 296 (`bf71816`), on one.kmd-school.example from 15:56
 UTC. Checked live as QA admin (reads both languages) in a container browser:
 the desk menu's heading reads "Practice years · अभ्यास वर्ष", the phone
 sheet's the same, and the row badge "TEST · परीक्षण"; nothing says "Test /
@@ -954,7 +954,7 @@ fee language provider follow the locale and catalogue the server sends again
 after sign-in and after the EN | हि switch (it had kept its first props as
 state); the real /login signs in the same way, so it is covered too. Test:
 `tests/shell-language-follows-server.test.tsx` (5).
-**D-518 live:** merged as PR 297 (`e0712c7`), on one.vpps.co.in from 16:28
+**D-518 live:** merged as PR 297 (`e0712c7`), on one.kmd-school.example from 16:28
 UTC. Checked live in a container browser, desk and phone, straight after
 sign-in as QA admin with no reload: `<html lang>` "hi", the menu heading
 "Practice years · अभ्यास वर्ष" and the badge "TEST · परीक्षण". The EN | हि
@@ -1268,7 +1268,7 @@ D-476 because the Reports change took D-475 first.
 
 Owner asked for agents replaying a whole school day as the academic
 coordinator, exam coordinator, accountant and admin in TEST-2026-27 (qa.*
-accounts, one.vpps.co.in). Branch `claude/project-thread-rjz9br`. Findings:
+accounts, one.kmd-school.example). Branch `claude/project-thread-rjz9br`. Findings:
 `/mnt/project-files/day-run-office/` (admin, academic, exam, accountant). **Done (this PR):** admission wizard recovers from a 504 that saved
 (was stuck on "Saving…") and warns when fees did not set up (A-14); a
 coordinator cannot overwrite a saved register without a reason (AC-01, server
@@ -1376,7 +1376,7 @@ Check keys probes Opus and the OpenAI drafting models; `assist_drafts` and
 authenticated, checked); cover plans prepared on save and by the new
 `assist-prepare` job (07:35 IST), Saturday class digests, a "Ready for you"
 card on teacher and admin Today, the plan inside the duty, voice notes tidied
-by themselves, "How did the period go?" and "While you were away". Merged as #199 and live on one.vpps.co.in. **Key check, 12:43 IST,
+by themselves, "How did the period go?" and "While you were away". Merged as #199 and live on one.kmd-school.example. **Key check, 12:43 IST,
 production:** every routed model answered: Claude Haiku 5.5 (2.4 s), Sonnet 5.5
 (3.0 s), Opus 5.5 (2.0 s); OpenAI `gpt-6-luna` (3.2 s), `gpt-6.1-sol` (3.9 s),
 `gpt-transcribe`; Gemini Paid 3.5 Flash-Lite (text and image). The free key now
@@ -1430,7 +1430,7 @@ phrases, and ignores results after Stop. **Released:** #192 merged as
 `16925a7d` (all checks green after the Quick substitute row moved to a lazy
 chunk: /students 243.6 KB against its 243.7 KB ceiling, main 243.4), production
 `dpl_GrtddLVS9f7GCCfAKjv1zTMv4TNu`. **Verified live** in a 386 px frame on
-one.vpps.co.in (admin, TEST session, fictional data): "+" shows Quick
+one.kmd-school.example (admin, TEST session, fictional data): "+" shows Quick
 substitute (Photo · Speak · Arrange) in place of "Assign substitute"; a slip
 handed to the camera input opened "Substitute from a photo" and read at once
 (no rows: slip dated 5 Oct, the date guard); Speak opened "Substitute by voice"
@@ -1455,7 +1455,7 @@ longer says "test session". **Not changed:** staff WhatsApp transport (cover
 notices queue, held, until the school turns staff notices on). **Released:**
 #189 merged as `39c4526a` (27/27 checks green); production with the switch at
 `test` (`dpl_AXF382EU9jcGRXe7P5bVdPhjXHq4`), then **`live`**
-(`dpl_A4kQZT45891zv2SePLpJCaFkTrzv`, one.vpps.co.in). **Verified live**
+(`dpl_A4kQZT45891zv2SePLpJCaFkTrzv`, one.kmd-school.example). **Verified live**
 (admin, fictional fixtures): TEST cover photo read 5/5 rows via Claude Sonnet
 5.5 in 4.5 s and wrote nothing; the date guard returned no rows for a
 wrong-date slip; Bolo answered "who is free in P5" read-only in TEST and in
@@ -1584,7 +1584,7 @@ and that TEST issues never verify. Surprise: the QA sign-in tool now refuses
 the QA accounts on production, so screens were checked in the synthetic School
 Office harness rather than signed in. **Released:** PR #163 merged as `cb2c7af2` (25/25
 checks green); production deployment `dpl_6cveAjNe5xEsFQU1oB2NX92bkyFT` READY on
-one.vpps.co.in, `/cv/{code}` answers publicly, staff routes redirect to sign-in,
+one.kmd-school.example, `/cv/{code}` answers publicly, staff routes redirect to sign-in,
 no runtime errors in the first hour. Remaining: the school's real principal
 name, place and codes in Certificate settings; a real certificate printed and
 signed once by the office.
@@ -1668,7 +1668,7 @@ claim. See [release evidence](evidence/2026-11-01-school-office-release.md).
 ## Faster app frame and student views — 1 November 2026
 
 Implementation commit `5d54795` on `perf/one-student-loading-20261101`, based on
-`b666e38`. The target is One at `one.vpps.co.in`.
+`b666e38`. The target is One at `one.kmd-school.example`.
 
 The directory overlaps optional task metadata with its main read and reads
 portraits beside attendance. Student 360 starts its authorized portrait beside
@@ -1854,27 +1854,27 @@ Sunday 13 Dec. Status per phase is kept in the table below.
 | 9b Job heartbeats + One's Sentry DSN | done | #165 `5cd16f5c` | D-363. `src/platform/observability/heartbeat.ts`, called from `/api/jobs/[job]` after a scheduled `ok`/`skipped` run. Set on One Production 3 Nov: `SENTRY_DSN` (`vppsone-staging`), `HEARTBEAT_URL_DRIVE_BACKUP` and `HEARTBEAT_URL_DOCUMENT_BACKUP` (Healthchecks.io, 1 day + 1 h grace, alerts to the owner's email). Other jobs have no URL and do not ping. |
 | 10 Rehearsals | not started | | Open from 5a (plan §5.4 / B5 / B6), both on one real snapshot: every export compared fees vs One with `npm run migrate:export-parity` (`ai-context-bundle` first; files in `%USERPROFILE%\.vppsone-migration\`, never the repo) — 0 differences; 10 receipts (cash, UPI, online, cheque, discount, family, carry-forward) printed from both apps on A4 and the office printer. Checklist in `docs/cutover/MIGRATION-TOOLS.md`. |
 
-## The fee app at fees.vpps.co.in — 30 October 2026
+## The fee app at fees.kmd-school.example — 30 October 2026
 
-The owner asked for School Fees on `fees.vpps.co.in` the same way (D-337,
+The owner asked for School Fees on `fees.kmd-school.example` the same way (D-337,
 `docs/DOMAIN.md`). The domain, Cloudflare CNAME and certificate were already in
 place from earlier that morning. Done now: the fee app's production
 `NEXT_PUBLIC_SITE_URL` and the live Supabase Site URL moved to
-`https://fees.vpps.co.in`, with `https://fees.vpps.co.in/**` added to its
+`https://fees.kmd-school.example`, with `https://fees.kmd-school.example/**` added to its
 redirect URLs, and the fee app redeployed. Here: `VERIFIED_ORIGINS.schoolfees`
 and PARITY.md, so VPPS One's links to the fee app open on the new address.
 Kept on `schoolfees-two.vercel.app` on purpose: the Meta-approved Pay now
 buttons, the Razorpay webhook and the MCP worker's site URL, so that host must
 never redirect.
 
-## VPPS One at one.vpps.co.in — 30 October 2026
+## VPPS One at one.kmd-school.example — 30 October 2026
 
 The owner asked for the app on the school's own subdomain (D-336, runbook
-`docs/DOMAIN.md`). Done outside the repo: `one.vpps.co.in` added to Vercel
+`docs/DOMAIN.md`). Done outside the repo: `one.kmd-school.example` added to Vercel
 project `vppsone`; Cloudflare `CNAME one → ade918e9b8269018.vercel-dns-017.com`,
 DNS only; certificate issued (Let's Encrypt, to 28 Jan 2027, auto-renewed);
-production-only `NEXT_PUBLIC_SITE_URL=https://one.vpps.co.in`, with Preview and
-Development keeping the old value; `https://one.vpps.co.in/**` in schoolfees-dev's
+production-only `NEXT_PUBLIC_SITE_URL=https://one.kmd-school.example`, with Preview and
+Development keeping the old value; `https://one.kmd-school.example/**` in schoolfees-dev's
 Supabase redirect URLs. In the repo: `VERIFIED_ORIGINS.vppsone` and PARITY.md.
 `vppsone.vercel.app` keeps answering. Surprise: the certificate was not issued
 on its own after the CNAME verified; `vercel certs issue` did it in seconds.
@@ -1883,7 +1883,7 @@ deciding later whether to redirect `vppsone.vercel.app`.
 
 Released: [PR 137](https://github.com/veerpatta/vppsone/pull/137) merged as
 `d2a30c9` (head `6f65bc8`, all 22 checks green before merging); production
-`dpl_A7HgWi1qg2X9y2QZJLboEhd1ZnHZ` READY, aliased to `one.vpps.co.in` and
+`dpl_A7HgWi1qg2X9y2QZJLboEhd1ZnHZ` READY, aliased to `one.kmd-school.example` and
 `vppsone.vercel.app`. Checked live: both `/login` 200 "VPPS One" from `bom1`,
 `http://` 308 to https, HSTS, manifest and service worker 200, a job route 404
 without its secret, `npm run verify:origins` 3/3. Not checked: a receipt

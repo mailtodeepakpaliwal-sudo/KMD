@@ -24,7 +24,7 @@ bridge (`/api/one/v1`). It does not mean a second set of money tables.
 **Why the existing copies can't just be switched on.** One already contains ported copies of
 every Fees screen under `src/app/(app)/fees/*`. They read and write One's de-identified replica
 (`wtgxcptmucjerhufzjcf`), not the live ledger (`vgqyilgstjvgohrsiwkb`). That is exactly why
-`middleware.ts:210` sends real users to `fees.vpps.co.in`. Turning that redirect off as things
+`middleware.ts:210` sends real users to `fees.kmd-school.example`. Turning that redirect off as things
 stand would cause three problems:
 
 - real cashiers would see replica balances;
@@ -63,7 +63,7 @@ These apply whenever `FEES_BRIDGE_ENABLED=true` and the viewer is a real user.
 | `vx/shell/ledger-notice.tsx:13` | the Fees dashboard |
 | `vx/screens/admin/student360-page.tsx:166` | the photo edit page |
 | `modules/dashboard/vx/admin-today.ts:288` | Today items via their `feesPath` |
-| `app/rv/[code]/page.tsx:76` | receipt verification, redirected to `fees.vpps.co.in/r/` |
+| `app/rv/[code]/page.tsx:76` | receipt verification, redirected to `fees.kmd-school.example/r/` |
 | `platform/config/apps.ts:143-158` | the School Fees app tile |
 
 **Already native on the bridge:**

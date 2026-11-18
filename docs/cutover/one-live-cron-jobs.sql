@@ -28,7 +28,7 @@
 --       (720 failures a day on 31 Oct, found by the health pack). Unscheduled
 --       here; nothing depends on it.
 --
---   ADDED by this script (pg_net GET to https://one.vpps.co.in, 55 s timeout):
+--   ADDED by this script (pg_net GET to https://one.kmd-school.example, 55 s timeout):
 --     whatsapp-scheduled-runs     0 4 * * *        /api/fees/cron/whatsapp-scheduled-runs   Bearer Vault VPPS_WHATSAPP_CRON_SECRET  (09:30 IST)
 --     online-payments-reconcile   */10 * * * *     /api/fees/cron/online-payments           Bearer Vault VPPS_ONLINE_PAYMENTS_CRON_SECRET
 --     auto-day-close              35 18 * * *      /api/fees/cron/auto-day-close            Bearer Vault VPPS_CRON_SECRET (00:05 IST, closes the IST day that ended)
@@ -57,7 +57,7 @@
 --        VPPS_HEALTH_JOB_TOKEN              … the health token
 --      e.g. select vault.create_secret('<value>', 'VPPS_HEALTH_JOB_TOKEN');
 --      (rotate with vault.update_secret; the jobs read Vault each time they fire)
---   3. One's Production deployment answers at https://one.vpps.co.in with the
+--   3. One's Production deployment answers at https://one.kmd-school.example with the
 --      C5 env set (docs/cutover/ENV-INVENTORY.md).
 --   4. Nothing calls the fees app: checked at the end.
 --
@@ -66,7 +66,7 @@
 --     no MISSING, EXTRA or INACTIVE job (the 3 kept + the 8 added, and
 --     smoke-enforce only if phase H kept it: 11 or 12); so no
 --     'refresh-sibling-groups-matview';
---   - 0 jobs whose command mentions schoolfees-two / fees.vpps.co.in / vgqyilgstjvgohrsiwkb;
+--   - 0 jobs whose command mentions schoolfees-two / fees.kmd-school.example / vgqyilgstjvgohrsiwkb;
 --   - after 10 minutes: `select j.jobname, d.status, d.start_time from cron.job_run_details d
 --       join cron.job j using (jobid) order by d.start_time desc limit 20;` shows
 --     online-payments-reconcile and staff-notices-dispatch 'succeeded', and
@@ -97,7 +97,7 @@ declare
   v_env text;
   v_missing text[];
   v_job record;
-  v_base constant text := 'https://one.vpps.co.in';
+  v_base constant text := 'https://one.kmd-school.example';
 begin
   -- 1. Where this is running, read first.
   begin
@@ -211,4 +211,4 @@ order by 1;
 
 select count(*) as jobs_calling_the_fees_app
 from cron.job
-where command ilike '%schoolfees-two%' or command ilike '%fees.vpps.co.in%' or command ilike '%vgqyilgstjvgohrsiwkb%';
+where command ilike '%schoolfees-two%' or command ilike '%fees.kmd-school.example%' or command ilike '%vgqyilgstjvgohrsiwkb%';

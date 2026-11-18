@@ -56,15 +56,15 @@ already stop sends; this makes it permanent). Remove
 
 ## Step 3 — One's Razorpay webhook off (Owner)
 
-Razorpay dashboard → Webhooks → disable `https://one.vpps.co.in/api/webhooks/razorpay`.
+Razorpay dashboard → Webhooks → disable `https://one.kmd-school.example/api/webhooks/razorpay`.
 Cancel any still-open One payment link from One's online screen (not from the
 fees app). The fees webhook was never removed.
-- **Check:** `npm run migrate:health -- --probe https://one.vpps.co.in` still
+- **Check:** `npm run migrate:health -- --probe https://one.kmd-school.example` still
   401 (the route itself stays; the dashboard simply stops calling it).
 
 ## Step 4 — the desk goes back to the fees app (Owner, Admin)
 
-Staff told; `fees.vpps.co.in` is the desk again. The owner turns the fees
+Staff told; `fees.kmd-school.example` is the desk again. The owner turns the fees
 app's **New payment links** back on if online payments should resume there
 (`OLD-PAY-NOW.md`, the reverse of C7).
 

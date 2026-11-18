@@ -64,7 +64,8 @@ describe("supabase/fee-migrations", () => {
 
   it.each(files)("%s says why it differs from the fees app", (file) => {
     const head = readFileSync(path.join(dir, file), "utf8").slice(0, 1500);
-    expect(head).toMatch(/KMD One fee-migration/);
+    // Written as "VPPS One" before the KMD conversion; applied files are not edited.
+    expect(head).toMatch(/(?:KMD|VPPS) One fee-migration/);
     expect(head).toMatch(/differ/i);
   });
 

@@ -15,7 +15,7 @@ changes the fees app, its worker or its Notion jobs; nothing here is built.
 
 > From Sunday 13 Dec the fee figures in the Claude fees connector and in
 > Notion are as of Saturday evening and will not change. The live figures are
-> in One (one.vpps.co.in). Use One's export for the daily fee list.
+> in One (one.kmd-school.example). Use One's export for the daily fee list.
 
 Nothing is switched off on the fees side: the worker and the Notion jobs keep
 running against the fees database, so nothing breaks — they just stop being
