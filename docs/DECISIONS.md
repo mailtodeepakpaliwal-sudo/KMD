@@ -1,5 +1,13 @@
 # Decisions
 
+## KMD: Add student and Fee setup on a fresh database — 18 November 2026
+
+| Decision | Outcome | Evidence and reason |
+|---|---|---|
+| D-652: add the student-info columns to `public.students` | Migration `kmd_students_info_columns` on `uvvusynovvhtacauvrzc`; same SQL in `supabase/kmd-setup/base/01_fee_tables.sql` and `parts/kmd_db_part02.sql` | The KMD rebuild of the fee base omitted 17 columns `info-fields.ts` writes on every admission, so each "Add student" insert returned 400. Additive, nullable text, plus `idx_students_aadhaar_no_unique`. |
+| D-653: KMD's local opt-in to fee writes, `KMD_LOCAL_FEE_WRITES=open` | `allowsLocalFeeWrites()` in `platform/deployment/confinement.ts`, used only by the fee write guard's mode | Fee setup writes school-wide rows (`config_change_batches`, `school_fee_defaults`, `transport_routes`) the confined guard can never place in a TEST session, so Fee setup could not be saved from `next dev` (VPP01). Owner chose to relax it locally. Fee writes only; needs `next dev`, the exact flag and no `VERCEL`/`VERCEL_ENV`, so no Vercel build can turn it on; `fee_writes_enabled` still decides. |
+| D-654: repair the rest of the rebuilt fee base found by Fee setup and dues | SQL in `supabase/kmd-setup/fixes/2026-11-18_*.sql`, run on `uvvusynovvhtacauvrzc`; same changes in `base/01_fee_tables.sql`, `parts/` and `post/90_kmd_finish.sql` | `fee_policy_configs.academic_fee_distribution` integer → text; four unique keys the app's upserts name (checked all 45); seven foreign keys its embeds need (checked all 55); `office_sync_events` shape; `student_fee_overrides.custom_other_fee_head_labels` integer → jsonb; `installments.amount_due` computed by trigger, as the fees app's generated column is. All affected tables were empty. |
+
 ## One stands on its own: the night's copy of the Fees app — 16 November 2026
 
 The owner (16 Nov, 02:27 UTC): delink One from the Fees app, so that One is an

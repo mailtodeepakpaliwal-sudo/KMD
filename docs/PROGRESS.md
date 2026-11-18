@@ -1,5 +1,15 @@
 # VPPS One — progress
 
+## KMD: Add student, Fee setup and dues on the fresh database — 18 November 2026
+
+The owner found Add student failing on KMD's own database (`uvvusynovvhtacauvrzc`).
+
+| What | Status | Branch / commit | Remaining or surprising |
+|---|---|---|---|
+| Rebuilt fee base repaired: student-info columns, `academic_fee_distribution` text, 4 upsert unique keys, 7 embed foreign keys, office sync shape, override labels jsonb, `amount_due` computed (D-652, D-654) | **applied** to `uvvusynovvhtacauvrzc` 18 Nov (SQL in `supabase/kmd-setup/fixes/`); setup scripts carry the same | `kmd/fee-base-repairs` | Surprised: every gap was in the hand-rebuilt base, not One's migrations; all affected tables were empty. Checked every `onConflict` (45) and every embed (55) in `src/`; column *types* the app writes were not swept the same way, so another type mismatch may still surface. |
+| Fee setup saveable from the owner's own `next dev`: `KMD_LOCAL_FEE_WRITES=open` (D-653) | **local only**; tests pass | `kmd/fee-base-repairs` | The confined guard can never place school-wide fee rows in a TEST session, so without this Fee setup only saves from Vercel production. |
+| 22 Nursery children loaded from the school's sheet; dues built (20 new ₹33,100, 2 returning ₹32,500) | **done** in the database | — | Loaded by SQL, so the "new" override was added by hand and dues built through a bulk edit; use Add student / Bulk Add Students for the other classes. |
+
 ## One stands on its own: the night's copy of the Fees app — 16 November 2026
 
 The owner asked that One be delinked from the Fees app and become an app of

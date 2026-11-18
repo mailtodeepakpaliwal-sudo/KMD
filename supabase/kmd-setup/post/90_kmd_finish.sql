@@ -59,6 +59,21 @@ grant execute on function vppsone.fees_copy_secret_matches(text) to service_role
 revoke all on function vppsone.fees_copy_cache_tags() from public, anon, authenticated;
 grant execute on function vppsone.fees_copy_cache_tags() to service_role;
 
+-- installments.amount_due is a generated column in the fees app
+-- ((base_amount + transport_amount) - discount_amount); the app never writes
+-- it. The rebuilt base made it a plain column defaulting to 0, so every
+-- installment read as Rs 0 due (18 Nov 2026). A trigger keeps the views that
+-- read it untouched.
+create or replace function vppsone.kmd_installment_amount_due() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  new.amount_due := coalesce(new.base_amount, 0) + coalesce(new.transport_amount, 0) - coalesce(new.discount_amount, 0);
+  return new;
+end $$;
+drop trigger if exists installments_amount_due on public.installments;
+create trigger installments_amount_due before insert or update on public.installments
+  for each row execute function vppsone.kmd_installment_amount_due();
+
 -- Every fee view reads with the caller's rights.
 grant select on all tables in schema public to authenticated, service_role;
 revoke all on all tables in schema public from anon;

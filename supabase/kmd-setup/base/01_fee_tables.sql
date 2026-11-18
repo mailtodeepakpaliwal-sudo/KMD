@@ -184,7 +184,7 @@ create table public.fee_policy_configs (
   is_active boolean,
   created_by uuid,
   updated_by uuid,
-  academic_fee_distribution integer,
+  academic_fee_distribution text check (academic_fee_distribution is null or academic_fee_distribution in ('first_only', 'equal')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -692,7 +692,7 @@ create table public.student_fee_overrides (
   is_active boolean,
   created_by uuid,
   updated_by uuid,
-  custom_other_fee_head_labels integer,
+  custom_other_fee_head_labels jsonb,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -798,6 +798,61 @@ create table public.students (
   updated_at timestamptz not null default now()
 );
 
+-- Student-info columns the ported fee code writes on every admission
+-- (src/modules/students-fees/domain/info-fields.ts). Missing from the first
+-- rebuild, which made every "Add student" fail with a 400; applied to
+-- uvvusynovvhtacauvrzc on 18 Nov 2026 as migration kmd_students_info_columns.
+alter table public.students
+  add column if not exists blood_group text,
+  add column if not exists religion text,
+  add column if not exists caste text,
+  add column if not exists nationality text,
+  add column if not exists mother_tongue text,
+  add column if not exists aadhaar_no text,
+  add column if not exists jan_aadhaar_no text,
+  add column if not exists apaar_id text,
+  add column if not exists previous_school text,
+  add column if not exists board_registration_no text,
+  add column if not exists tehsil text,
+  add column if not exists district text,
+  add column if not exists state text,
+  add column if not exists pincode text,
+  add column if not exists guardian_relation text,
+  add column if not exists emergency_contact_name text,
+  add column if not exists emergency_contact_phone text;
+
+create unique index if not exists idx_students_aadhaar_no_unique
+  on public.students (aadhaar_no) where aadhaar_no is not null;
+
+-- Unique keys the app's upserts name in ON CONFLICT (18 Nov 2026: Fee setup
+-- failed with "no unique or exclusion constraint matching the ON CONFLICT").
+alter table public.conventional_discount_policies
+  add constraint conventional_discount_policies_session_code_key unique (academic_session_label, code);
+alter table public.student_family_members
+  add constraint student_family_members_session_group_student_key unique (academic_session_label, family_group_id, student_id);
+alter table public.collection_closures
+  add constraint collection_closures_payment_date_key unique (payment_date);
+alter table public.student_collection_flags
+  add constraint student_collection_flags_session_student_key unique (session_label, student_id);
+
+-- Foreign keys the app's linked reads (PostgREST embeds) need, and the office
+-- sync event shape the app writes (18 Nov 2026: dues preparation read 400).
+alter table public.student_conventional_discount_assignments
+  add constraint scda_policy_id_fkey foreign key (policy_id) references public.conventional_discount_policies(id),
+  add constraint scda_family_group_id_fkey foreign key (family_group_id) references public.student_family_groups(id),
+  add constraint scda_student_id_fkey foreign key (student_id) references public.students(id) on delete cascade;
+alter table public.refund_requests
+  add constraint refund_requests_receipt_id_fkey foreign key (receipt_id) references public.receipts(id),
+  add constraint refund_requests_student_id_fkey foreign key (student_id) references public.students(id);
+alter table public.student_late_fee_waivers
+  add constraint student_late_fee_waivers_installment_id_fkey foreign key (installment_id) references public.installments(id) on delete cascade;
+alter table public.student_repayment_receipt_links
+  add constraint student_repayment_receipt_links_receipt_id_fkey foreign key (receipt_id) references public.receipts(id);
+alter table public.office_sync_events
+  add column if not exists action text,
+  alter column entity_id type text using entity_id::text,
+  alter column affected_student_ids type text[] using null;
+
 create table public.transport_routes (
   id uuid primary key default gen_random_uuid(),
   route_code text,
@@ -883,3 +938,7 @@ create table public.whatsapp_test_sends (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Needed by the reminder delivery read (embed students); 18 Nov 2026.
+alter table public.whatsapp_reminder_sends
+  add constraint whatsapp_reminder_sends_student_id_fkey foreign key (student_id) references public.students(id);
