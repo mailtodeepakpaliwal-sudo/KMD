@@ -146,6 +146,7 @@ export const ANNOTATIONS = {
   ONE_BRIDGE_AUTH_URL: ["Fees deployment operator", "set on Fees production; pinned One Auth project URL"],
   ONE_BRIDGE_AUTH_ANON_KEY: ["One publishable API key", "set on Fees production only to verify One access tokens; never a One service-role key"],
   SCHOOLFEES_LOCAL_ISOLATION: ["Fees local test runtime", "local tests only; never set on production"],
+  KMD_LOCAL_FEE_WRITES: [OWNER, "local `next dev` only — `open` lets the owner's own machine save Fee setup (D-653); ignored on any Vercel build, never set there"],
   // Supabase — One's own project wtgx; never the fees project's keys.
   NEXT_PUBLIC_SUPABASE_URL: ["Supabase wtgx → Settings → API (owner)", "set — keep wtgx (D-338); never the fees URL"],
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ["Supabase wtgx → API keys (owner)", "set — wtgx's key"],

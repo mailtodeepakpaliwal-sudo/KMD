@@ -43,6 +43,7 @@ Coexistence supersedes the historical C5 provider-copy notes below: Fees retains
 | `GEMINI_THINKING_BUDGET` | `src/lib/ai/config.ts` | — | — | — | owner | confined Gemini pilot only; optional Gemini 2.5 budget |
 | `GEMINI_THINKING_LEVEL` | `src/lib/ai/config.ts` | — | — | — | owner | confined Gemini pilot only; optional minimal or low |
 | `JOBS_SECRET` | `src/app/api/jobs/[job]/route.ts`, `src/vx/screens/settings/data.ts` | — | yes | — | owner | set — per-job tokens (`npm run jobs:tokens`) go into Vault for pg_cron |
+| `KMD_LOCAL_FEE_WRITES` | `src/platform/deployment/confinement.ts` | — | — | — | owner | local `next dev` only — `open` lets the owner's own machine save Fee setup (D-653); ignored on any Vercel build, never set there |
 | `LOCALE_SWITCHER_ENABLED` | `src/platform/env.ts` | `src/platform/env.ts` | — | — | owner | leave unset (on); not set on fees either |
 | `MESSAGE_PROVIDER` | `src/modules/collection/data/message-provider.ts` | — | — | — | owner | leave unset (the school's WhatsApp); `mock` is refused on live |
 | `NEXT_PUBLIC_SCHOOL_ADDRESS` | `src/platform/config/school.ts`, `src/vx/screens/settings/data.ts` | `src/platform/config/school.ts` | — | yes | copy the fees Production value (owner) | add at C5 — receipt header |
