@@ -2,7 +2,7 @@ import { isSchoolOpen, type CalendarDayKind } from "@/modules/academics/domain/c
 import { addDays, isIsoDay, weekdayIndex } from "@/platform/dates";
 
 import type { HelperButton, HelperMessage, HelperRow } from "./helper-messages";
-import { CANCEL_BUTTON, dateText, footer, intro, MENU_BUTTON, OFFICE_BUTTON, OFFICE_PHONE, say, type ReplyContext, type Words } from "./helper-replies";
+import { CANCEL_BUTTON, dateText, footer, intro, MENU_BUTTON, OFFICE_BUTTON, officeNumber, say, type ReplyContext, type Words } from "./helper-replies";
 import { helperId, QUESTION_WORDS, type HelperLanguage } from "./helper-text";
 
 /**
@@ -339,14 +339,14 @@ export function visitClosedReply(context: ReplyContext, why: "closed" | "unreada
   const body =
     why === "closed"
       ? say(language, {
-          hi: `🏫 अगले कुछ हफ़्ते स्कूल बंद है, इसलिए अभी यहाँ आने का दिन नहीं चुना जा सकता। ऑफ़िस को लिखें, वे आपके साथ दिन तय करेंगे, या फ़ोन करें: ${OFFICE_PHONE}`,
-          hx: `🏫 Agle kuch hafte school band hai, isliye abhi yahan aane ka din nahi chuna ja sakta. Office ko likhiye, woh aapke saath din tay karenge, ya phone kariye: ${OFFICE_PHONE}`,
-          en: `🏫 The school is closed for the next few weeks, so a visit cannot be booked here just now. Write to the office and they will fix a day with you, or call: ${OFFICE_PHONE}`,
+          hi: `🏫 अगले कुछ हफ़्ते स्कूल बंद है, इसलिए अभी यहाँ आने का दिन नहीं चुना जा सकता। ऑफ़िस को लिखें, वे आपके साथ दिन तय करेंगे, या फ़ोन करें${officeNumber("hi")}`,
+          hx: `🏫 Agle kuch hafte school band hai, isliye abhi yahan aane ka din nahi chuna ja sakta. Office ko likhiye, woh aapke saath din tay karenge, ya phone kariye${officeNumber("hx")}`,
+          en: `🏫 The school is closed for the next few weeks, so a visit cannot be booked here just now. Write to the office and they will fix a day with you, or call${officeNumber("en")}`,
         })
       : say(language, {
-          hi: `🏫 माफ़ कीजिए, अभी यहाँ आने का दिन नहीं चुना जा सकता 🙏 ऑफ़िस को लिखें, वे दिन तय करेंगे, या फ़ोन करें: ${OFFICE_PHONE}`,
-          hx: `🏫 Maaf kijiye, abhi yahan aane ka din nahi chuna ja sakta 🙏 Office ko likhiye, woh din tay karenge, ya phone kariye: ${OFFICE_PHONE}`,
-          en: `🏫 Sorry, a visit cannot be booked here just now 🙏 Write to the office and they will fix a day, or call: ${OFFICE_PHONE}`,
+          hi: `🏫 माफ़ कीजिए, अभी यहाँ आने का दिन नहीं चुना जा सकता 🙏 ऑफ़िस को लिखें, वे दिन तय करेंगे, या फ़ोन करें${officeNumber("hi")}`,
+          hx: `🏫 Maaf kijiye, abhi yahan aane ka din nahi chuna ja sakta 🙏 Office ko likhiye, woh din tay karenge, ya phone kariye${officeNumber("hx")}`,
+          en: `🏫 Sorry, a visit cannot be booked here just now 🙏 Write to the office and they will fix a day, or call${officeNumber("en")}`,
         });
   return { kind: "buttons", body: `${intro(context)}${body}`, buttons: [OFFICE_BUTTON(language), MENU_BUTTON(language)], footer: footer(context) };
 }

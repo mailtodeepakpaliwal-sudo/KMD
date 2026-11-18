@@ -29,8 +29,6 @@ import { shortClassLabel, type NoticeLanguage } from "@/modules/whatsapp/domain/
  * the ground truth submitted to Meta.
  */
 
-const UPI = "upi://pay?pa=shriveerpattassecsch.68347408@hdfcbank";
-
 /* ------------------------------------------------------- family notices (v3) */
 
 /**
@@ -90,7 +88,6 @@ function familyBody(args: {
   explanation: string;
   payLine: string;
   closing: string;
-  office: string;
   values: FamilyNoticeValues;
   language: NoticeLanguage;
 }): string {
@@ -109,11 +106,8 @@ function familyBody(args: {
     args.explanation,
     "",
     args.payLine,
-    UPI,
     "",
     args.closing,
-    "",
-    args.office,
   ].join("\n");
 }
 
@@ -121,20 +115,18 @@ const HI = {
   greeting: "प्रिय",
   childrenLabel: "विद्यार्थी",
   totalLabel: "कुल देय राशि",
-  payLine: "फीस काउंटर पर अथवा इस UPI लिंक से जमा करें:",
+  payLine: "फीस काउंटर पर जमा करें।",
   closing:
     "भुगतान करते समय विद्यार्थियों के नाम अवश्य लिखें तथा रसीद प्राप्त करें। यदि भुगतान हो चुका है तो इस संदेश को अनदेखा करें।",
-  office: "जानकारी हेतु कार्यालय 9352205884 पर संपर्क करें।",
 };
 
 const EN = {
   greeting: "Dear",
   childrenLabel: "Students",
   totalLabel: "Total amount due",
-  payLine: "Pay at the school fee counter or using this UPI link:",
+  payLine: "Pay at the school fee counter.",
   closing:
     "Please write the students' names with the payment and collect a receipt. If you have already paid, kindly ignore this message.",
-  office: "For any query, call the office on 9352205884.",
 };
 
 /**
@@ -381,8 +373,6 @@ function receiptBodyEn(v: ReceiptNoticeValues): string {
     `Balance remaining: Rs. ${remaining}`, // @allow-raw-money-format: verbatim from the English body submitted to Meta
     "",
     "Thank you. Your payment has been recorded against the student named above. Please keep the printed receipt for your records.",
-    "",
-    "If any detail above does not match your receipt, call the office on 9352205884.",
   ].join("\n");
 }
 
@@ -401,8 +391,6 @@ function receiptBodyHi(v: ReceiptNoticeValues): string {
     `शेष राशि: रु. ${remaining}`,
     "",
     "धन्यवाद। आपका भुगतान उपरोक्त विद्यार्थी के खाते में दर्ज कर लिया गया है। कृपया मुद्रित रसीद सुरक्षित रखें।",
-    "",
-    "यदि उपरोक्त विवरण आपकी रसीद से भिन्न है तो कार्यालय 9352205884 पर संपर्क करें।",
   ].join("\n");
 }
 

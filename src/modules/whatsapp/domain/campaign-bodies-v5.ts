@@ -132,8 +132,6 @@ function feeStatementBodyEn(v: FeeStatementNoticeValues): string {
     `Fees pending: Rs. ${pending}`, // @allow-raw-money-format: verbatim from the body submitted to Meta
     "",
     "Your full fee statement is attached. It lists every installment, what has been received, and what remains.",
-    "",
-    "For any correction, call the office on 9352205884.",
   ].join("\n");
 }
 
@@ -150,8 +148,6 @@ function feeStatementBodyHi(v: FeeStatementNoticeValues): string {
     `शेष शुल्क: रु. ${pending}`,
     "",
     "आपका पूरा शुल्क विवरण संलग्न है। इसमें प्रत्येक किस्त, प्राप्त राशि और शेष राशि दर्ज है।",
-    "",
-    "किसी सुधार के लिए कार्यालय 9352205884 पर संपर्क करें।",
   ].join("\n");
 }
 
@@ -280,8 +276,6 @@ function reversalBodyEn(v: ReversalNoticeValues): string {
     `Reversed on: ${date}`,
     "",
     `This payment has been reversed in our records and no longer counts towards the fees. The amount now outstanding is Rs. ${balance}.`, // @allow-raw-money-format: verbatim from the body submitted to Meta
-    "",
-    "If this is unexpected, please contact the office on 9352205884.",
   ].join("\n");
 }
 
@@ -298,8 +292,6 @@ function reversalBodyHi(v: ReversalNoticeValues): string {
     `निरस्त तिथि: ${date}`,
     "",
     `यह भुगतान हमारे रिकॉर्ड में निरस्त कर दिया गया है और अब शुल्क में नहीं गिना जाएगा। अब शेष राशि रु. ${balance} है।`,
-    "",
-    "यदि यह अप्रत्याशित है तो कृपया कार्यालय 9352205884 पर संपर्क करें।",
   ].join("\n");
 }
 

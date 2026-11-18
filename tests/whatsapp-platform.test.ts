@@ -37,7 +37,7 @@ describe("which server this deployment talks to", () => {
   });
 
   it("reads Meta's Cloud API, with the default Graph version", () => {
-    const config = readWhatsAppConfig({ WHATSAPP_PHONE_NUMBER_ID: "123456789012345", WHATSAPP_ACCESS_TOKEN: "t", WHATSAPP_SENDER_NUMBER: "0000000000" });
+    const config = readWhatsAppConfig({ WHATSAPP_PHONE_NUMBER_ID: "123456789012345", WHATSAPP_ACCESS_TOKEN: "t", WHATSAPP_SENDER_NUMBER: SCHOOL_WHATSAPP_NUMBER });
     expect(config).toMatchObject({ ok: true, provider: "meta_cloud", phoneNumberId: "123456789012345", graphVersion: "v21.0" });
   });
 

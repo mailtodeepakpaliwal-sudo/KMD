@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- One production only: `one.vpps.co.in`, Supabase `wtgxcptmucjerhufzjcf`.
+- One production only: `one.kmd-school.example`, Supabase `wtgxcptmucjerhufzjcf`.
 - Fresh permissions, session/visibility/class checks and source financial authority remain.
 - No new dependencies or persistent auth, money or private-photo cache.
 - Bilingual copy; no real sends, payments, student edits or benchmark permission grants.

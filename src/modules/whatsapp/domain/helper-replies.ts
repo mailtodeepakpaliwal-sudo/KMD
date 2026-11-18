@@ -1,3 +1,4 @@
+import { OFFICE_PHONE_DIGITS } from "@/platform/config/office-phone";
 import { formatInr } from "@/platform/helpers/currency";
 
 import type { AbsenceNote } from "./helper-absence";
@@ -48,7 +49,18 @@ export type ReplyContext = {
 
 export type HandoffTarget = "class_teacher" | "accounts" | "office" | "principal";
 
-export const OFFICE_PHONE = "";
+/** The school's office number, or "" until `NEXT_PUBLIC_SCHOOL_PHONE` is set (office-phone.ts). */
+export const OFFICE_PHONE = OFFICE_PHONE_DIGITS;
+
+/**
+ * What follows "call the office" in a reply: ": 9876543210", or just the
+ * sentence's full stop while the school has no number set. The conversion left
+ * this empty, so replies ended "call the office: " (18 Nov 2026).
+ */
+export function officeNumber(language: HelperLanguage): string {
+  if (OFFICE_PHONE) return `: ${OFFICE_PHONE}`;
+  return language === "hi" ? "।" : ".";
+}
 
 export type Words = { hi: string; hx: string; en: string };
 
@@ -428,9 +440,9 @@ export function receiptCaption(
 export function receiptUnsentReply(context: ReplyContext, child: ChildFacts, receipt: ReceiptFact): HelperMessage {
   const { language } = context;
   const sorry = say(language, {
-    hi: `माफ़ कीजिए 🙏 रसीद की PDF अभी नहीं भेजी जा सकी। थोड़ी देर में *फिर से भेजें* दबाएँ, या ऑफ़िस से कॉपी लें: ${OFFICE_PHONE}`,
-    hx: `Maaf kijiye 🙏 Receipt ki PDF abhi nahi bheji ja saki. Thodi der mein *Phir se bhejiye* dabaiye, ya office se copy lijiye: ${OFFICE_PHONE}`,
-    en: `Sorry 🙏 the receipt's PDF could not be sent just now. Tap *Try again* in a little while, or ask the office for a copy: ${OFFICE_PHONE}`,
+    hi: `माफ़ कीजिए 🙏 रसीद की PDF अभी नहीं भेजी जा सकी। थोड़ी देर में *फिर से भेजें* दबाएँ, या ऑफ़िस से कॉपी लें${officeNumber("hi")}`,
+    hx: `Maaf kijiye 🙏 Receipt ki PDF abhi nahi bheji ja saki. Thodi der mein *Phir se bhejiye* dabaiye, ya office se copy lijiye${officeNumber("hx")}`,
+    en: `Sorry 🙏 the receipt's PDF could not be sent just now. Tap *Try again* in a little while, or ask the office for a copy${officeNumber("en")}`,
   });
   return {
     kind: "buttons",
@@ -646,9 +658,9 @@ export function reportCardCaption(context: ReplyContext, child: ChildFacts, resu
 export function reportCardUnsentReply(context: ReplyContext, child: ChildFacts, result: ResultFacts, card: IssuedCardFacts): HelperMessage {
   const { language } = context;
   const sorry = say(language, {
-    hi: `माफ़ कीजिए 🙏 प्रगति पत्र की PDF अभी नहीं भेजी जा सकी। थोड़ी देर में *फिर से भेजें* दबाएँ, या ऑफ़िस से लें: ${OFFICE_PHONE}`,
-    hx: `Maaf kijiye 🙏 Report card ki PDF abhi nahi bheji ja saki. Thodi der mein *Phir se bhejiye* dabaiye, ya office se lijiye: ${OFFICE_PHONE}`,
-    en: `Sorry 🙏 the report card's PDF could not be sent just now. Tap *Try again* in a little while, or ask the office: ${OFFICE_PHONE}`,
+    hi: `माफ़ कीजिए 🙏 प्रगति पत्र की PDF अभी नहीं भेजी जा सकी। थोड़ी देर में *फिर से भेजें* दबाएँ, या ऑफ़िस से लें${officeNumber("hi")}`,
+    hx: `Maaf kijiye 🙏 Report card ki PDF abhi nahi bheji ja saki. Thodi der mein *Phir se bhejiye* dabaiye, ya office se lijiye${officeNumber("hx")}`,
+    en: `Sorry 🙏 the report card's PDF could not be sent just now. Tap *Try again* in a little while, or ask the office${officeNumber("en")}`,
   });
   const lines = [`${childHeading(child, language)} · ${examName(result, language)}`, ...cardSummaryLines(card, result, language)];
   return {
@@ -700,9 +712,9 @@ export function teacherPrompt(context: ReplyContext, child: ChildFacts): HelperM
 /** "Talk to the office": the next thing the parent types goes to the office. */
 export function officePrompt(context: ReplyContext): HelperMessage {
   const body = say(context.language, {
-    hi: `✍️ स्कूल ऑफ़िस के लिए अपना संदेश अब लिखें, हम पहुँचा देंगे।\nया ऑफ़िस को फ़ोन करें: ${OFFICE_PHONE}`,
-    hx: `✍️ School office ke liye apna sandesh ab likhiye, hum pahuncha denge.\nYa office ko phone kariye: ${OFFICE_PHONE}`,
-    en: `✍️ Type your message for the school office now and we will pass it on.\nOr call the office: ${OFFICE_PHONE}`,
+    hi: `✍️ स्कूल ऑफ़िस के लिए अपना संदेश अब लिखें, हम पहुँचा देंगे।\nया ऑफ़िस को फ़ोन करें${officeNumber("hi")}`,
+    hx: `✍️ School office ke liye apna sandesh ab likhiye, hum pahuncha denge.\nYa office ko phone kariye${officeNumber("hx")}`,
+    en: `✍️ Type your message for the school office now and we will pass it on.\nOr call the office${officeNumber("en")}`,
   });
   return { kind: "buttons", body, buttons: [CANCEL_BUTTON(context.language)], footer: footer(context) };
 }
@@ -833,9 +845,9 @@ export function handoffFailedReply(context: ReplyContext): HelperMessage {
   return {
     kind: "buttons",
     body: say(context.language, {
-      hi: `माफ़ कीजिए, अभी आपका संदेश आगे नहीं भेजा जा सका 🙏 कृपया थोड़ी देर बाद फिर लिखें, या ऑफ़िस को फ़ोन करें: ${OFFICE_PHONE}`,
-      hx: `Maaf kijiye, abhi aapka sandesh aage nahi bheja ja saka 🙏 Kripya thodi der baad phir likhiye, ya office ko phone kariye: ${OFFICE_PHONE}`,
-      en: `Sorry, your message could not be passed on just now 🙏 Please write again in a little while, or call the office: ${OFFICE_PHONE}`,
+      hi: `माफ़ कीजिए, अभी आपका संदेश आगे नहीं भेजा जा सका 🙏 कृपया थोड़ी देर बाद फिर लिखें, या ऑफ़िस को फ़ोन करें${officeNumber("hi")}`,
+      hx: `Maaf kijiye, abhi aapka sandesh aage nahi bheja ja saka 🙏 Kripya thodi der baad phir likhiye, ya office ko phone kariye${officeNumber("hx")}`,
+      en: `Sorry, your message could not be passed on just now 🙏 Please write again in a little while, or call the office${officeNumber("en")}`,
     }),
     buttons: [MENU_BUTTON(context.language)],
     footer: footer(context),
@@ -913,9 +925,9 @@ export function ratingReply(context: ReplyContext, outcome: RatingOutcome, lateH
       en: "🙏 The school office already has your question, and will answer you here.",
     },
     not_passed_on: {
-      hi: `माफ़ कीजिए कि इससे मदद नहीं हुई 🙏 अभी इसे आगे नहीं भेजा जा सका। कृपया ऑफ़िस को फ़ोन करें: ${OFFICE_PHONE}`,
-      hx: `Maaf kijiye ki isse madad nahi hui 🙏 Abhi ise aage nahi bheja ja saka. Kripya office ko phone kariye: ${OFFICE_PHONE}`,
-      en: `Sorry that did not help 🙏 It could not be passed on just now. Please call the office: ${OFFICE_PHONE}`,
+      hi: `माफ़ कीजिए कि इससे मदद नहीं हुई 🙏 अभी इसे आगे नहीं भेजा जा सका। कृपया ऑफ़िस को फ़ोन करें${officeNumber("hi")}`,
+      hx: `Maaf kijiye ki isse madad nahi hui 🙏 Abhi ise aage nahi bheja ja saka. Kripya office ko phone kariye${officeNumber("hx")}`,
+      en: `Sorry that did not help 🙏 It could not be passed on just now. Please call the office${officeNumber("en")}`,
     },
     ask_office: {
       hi: "माफ़ कीजिए 🙏 नीचे *ऑफ़िस से बात* दबाएँ और बताएँ कि आपको और क्या जानना है।",
@@ -986,9 +998,9 @@ export function recordsUnreadableReply(language: HelperLanguage): HelperMessage 
   return {
     kind: "text",
     text: say(language, {
-      hi: `माफ़ कीजिए, अभी आपके बच्चे की जानकारी नहीं खुल पाई 🙏 कृपया कुछ मिनट बाद फिर लिखें, या ऑफ़िस को फ़ोन करें: ${OFFICE_PHONE}`,
-      hx: `Maaf kijiye, abhi aapke bachche ki jaankari nahi khul payi 🙏 Kripya kuch minute baad phir likhiye, ya office ko phone kariye: ${OFFICE_PHONE}`,
-      en: `Sorry, I could not open your child's details just now 🙏 Please write again in a few minutes, or call the office: ${OFFICE_PHONE}`,
+      hi: `माफ़ कीजिए, अभी आपके बच्चे की जानकारी नहीं खुल पाई 🙏 कृपया कुछ मिनट बाद फिर लिखें, या ऑफ़िस को फ़ोन करें${officeNumber("hi")}`,
+      hx: `Maaf kijiye, abhi aapke bachche ki jaankari nahi khul payi 🙏 Kripya kuch minute baad phir likhiye, ya office ko phone kariye${officeNumber("hx")}`,
+      en: `Sorry, I could not open your child's details just now 🙏 Please write again in a few minutes, or call the office${officeNumber("en")}`,
     }),
   };
 }

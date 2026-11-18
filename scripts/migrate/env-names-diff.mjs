@@ -146,6 +146,7 @@ export const ANNOTATIONS = {
   ONE_BRIDGE_AUTH_URL: ["Fees deployment operator", "set on Fees production; pinned One Auth project URL"],
   ONE_BRIDGE_AUTH_ANON_KEY: ["One publishable API key", "set on Fees production only to verify One access tokens; never a One service-role key"],
   SCHOOLFEES_LOCAL_ISOLATION: ["Fees local test runtime", "local tests only; never set on production"],
+  KMD_LOCAL_FEE_WRITES: [OWNER, "local `next dev` only — `open` lets the owner's own machine save Fee setup (D-653); ignored on any Vercel build, never set there"],
   // Supabase — One's own project wtgx; never the fees project's keys.
   NEXT_PUBLIC_SUPABASE_URL: ["Supabase wtgx → Settings → API (owner)", "set — keep wtgx (D-338); never the fees URL"],
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ["Supabase wtgx → API keys (owner)", "set — wtgx's key"],
@@ -155,7 +156,7 @@ export const ANNOTATIONS = {
   // Deployment identity
   VPPSONE_ENV: [OWNER, "set; must be `live` at C5 — the parent gate (D-353) and live Razorpay keys (D-354 (3)) need it"],
   APP_MODE: [OWNER, "add at C5: `production` — required together with VPPSONE_ENV=live (`getFeeSchema()` throws otherwise)"],
-  NEXT_PUBLIC_SITE_URL: [OWNER, "set — `https://one.vpps.co.in`"],
+  NEXT_PUBLIC_SITE_URL: [OWNER, "set — `https://one.kmd-school.example`"],
   VERCEL_ENV: [SYSTEM, "automatic — `production` is what makes a deployment unconfined (D-346)"],
   VERCEL_URL: [SYSTEM, "automatic"],
   VERCEL: [SYSTEM, "automatic — `1` on Vercel; next.config.ts skips the build's type check there (CI is the gate)"],
@@ -179,7 +180,8 @@ export const ANNOTATIONS = {
   WHATSAPP_CRON_SECRET: [OWNER, "leave unset — the pg_cron job sends Vault's VPPS_WHATSAPP_CRON_SECRET (whatsapp_cron_secret_matches)"],
   // School identity (receipts, PDFs)
   NEXT_PUBLIC_SCHOOL_NAME: ["fees Production value (owner)", "set"],
-  NEXT_PUBLIC_SCHOOL_PHONE: ["copy the fees Production value (owner)", "add at C5 — receipt header (critique1 B6)"],
+  NEXT_PUBLIC_SCHOOL_PHONE: ["copy the fees Production value (owner)", "add at C5 — receipt header (critique1 B6); also the office number in WhatsApp messages, left out while unset"],
+  NEXT_PUBLIC_SCHOOL_UPI_ID: [OWNER, "add when KMD has its own UPI ID — unset, no UPI QR or pay link is drawn anywhere (the old school's ID was removed 18 Nov 2026)"],
   NEXT_PUBLIC_SCHOOL_ADDRESS: ["copy the fees Production value (owner)", "add at C5 — receipt header"],
   NEXT_PUBLIC_SCHOOL_EMAIL: ["copy the fees Production value (owner)", "add at C5 — receipt header"],
   // Fee features

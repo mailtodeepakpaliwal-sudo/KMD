@@ -114,7 +114,7 @@ The Auth URL is pinned to One. `private.one_bridge_config` and explicit
 One production variables: `FEES_BRIDGE_ENABLED`, `FEES_BRIDGE_ORIGIN`,
 `FEES_BRIDGE_KEY`, `FEES_BRIDGE_SYNC_KEY`, `FEES_BRIDGE_CRON_SECRET`, and
 `FEES_BRIDGE_WRITES_ENABLED`. The only allowed origin is
-`https://fees.vpps.co.in`. Production secrets are never installed in preview.
+`https://fees.kmd-school.example`. Production secrets are never installed in preview.
 Normal One Supabase clients retain One's own project.
 
 The scheduler POSTs `/api/jobs/fees-bridge-sync` with the dedicated bearer
@@ -203,9 +203,9 @@ source and One environment gates; the final readiness report records their
 operator acceptance state rather than inferring it from a deployment alone.
 
 - Source production merge `6973f9009c3c3db939c2624fec4fc0c02cba9e0b`, deployment
-  `dpl_CUTFnMutrjdbCXkhGUbYjeNUz4c7`, verified on `fees.vpps.co.in`.
+  `dpl_CUTFnMutrjdbCXkhGUbYjeNUz4c7`, verified on `fees.kmd-school.example`.
 - One PR152 merge `3b642e2ef45561763f5da62601bbe1b3b36b52a9`, deployment
-  `dpl_GcQnGwTsMrxUbN6KUE9t5kduJqQ9`, verified on `one.vpps.co.in`.
+  `dpl_GcQnGwTsMrxUbN6KUE9t5kduJqQ9`, verified on `one.kmd-school.example`.
   Its exact reviewed head passed all 23 checks: 401 test files, 18,546 tests
   passed and one skipped, plus build, synthetic mobile, concurrency and scope
   checks. Later directory/session and operator-tool refinements have separate
@@ -230,7 +230,7 @@ operator acceptance state rather than inferring it from a deployment alone.
   roles: six readers and five potential collectors. Initial scope is `2026-27`.
   One's native real fee engine and parent/staff dispatch remain disabled.
   Source financial messages, providers, payment links and day close remain
-  owned by Fees. Auth's site URL is now `https://one.vpps.co.in`; public sign-up
+  owned by Fees. Auth's site URL is now `https://one.kmd-school.example`; public sign-up
   remains disabled. No passwords were changed or access emails sent.
 - The first deployed worker completed in 6.679 seconds. Its frozen source
   snapshot matched One in all four full-content SHA256 manifests: one session,

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { isConfinedDeployment } from "@/platform/deployment/confinement";
+import { allowsLocalFeeWrites, isConfinedDeployment } from "@/platform/deployment/confinement";
 import { feeWritesMode, type FeeWritesMode } from "@/platform/deployment/decisions";
 import { readEffectiveEnvironment } from "@/platform/deployment/marker";
 import { getOptionalEnvVar, getServerSupabaseUrl } from "@/platform/env";
@@ -57,7 +57,9 @@ export async function currentFeeWritesMode(): Promise<FeeWritesMode> {
   // must never revive One's local real financial engine.
   if (feesBridgeEnabled()) return "test-only";
   if (cachedMode && Date.now() - cachedMode.at < TTL_MS) return cachedMode.value;
-  const confined = isConfinedDeployment();
+  // KMD's explicit local opt-in (allowsLocalFeeWrites): fee writes only, own
+  // machine only; the database setting below still decides.
+  const confined = isConfinedDeployment() && !allowsLocalFeeWrites();
   let value: FeeWritesMode = "test-only";
   if (!confined) {
     const [environment, rows] = await Promise.all([

@@ -15,9 +15,9 @@ should not be there to refuse.
 
 | Piece | One path | Credential it checks |
 |---|---|---|
-| Parent's Pay now page | `https://one.vpps.co.in/pay/<code>` | the random pay code (160 bits); fees codes minted before the cutover line open nothing (`payCodeRefused`) |
+| Parent's Pay now page | `https://one.kmd-school.example/pay/<code>` | the random pay code (160 bits); fees codes minted before the cutover line open nothing (`payCodeRefused`) |
 | Its status poll | `POST /pay/<code>/status` | the same code |
-| Razorpay webhook | **`https://one.vpps.co.in/api/webhooks/razorpay`** (also answers at `/api/fees/webhooks/razorpay`) | HMAC of the raw body with `RAZORPAY_WEBHOOK_SECRET`; a 404 until that is set |
+| Razorpay webhook | **`https://one.kmd-school.example/api/webhooks/razorpay`** (also answers at `/api/fees/webhooks/razorpay`) | HMAC of the raw body with `RAZORPAY_WEBHOOK_SECRET`; a 404 until that is set |
 | Reconciler (every 10 min) | `GET /api/fees/cron/online-payments` | `Authorization: Bearer` = `CRON_SECRET`, `ONLINE_PAYMENTS_CRON_SECRET`, or the Vault secret `VPPS_ONLINE_PAYMENTS_CRON_SECRET` |
 | Staff screen | `/fees/payments/online` (nav: *Online payments*) | signed in, One's `fees:accounts`; posting also `payments:write`, closing a review `finance:approve`, switches `settings:write`; test accounts never flip a switch |
 
@@ -69,7 +69,7 @@ account-wide settings; the owner **confirms** each and changes nothing:
 
 Then **add** (the one dashboard change, made by the owner at C6, live mode):
 
-- [ ] A webhook to `https://one.vpps.co.in/api/webhooks/razorpay` with **One's**
+- [ ] A webhook to `https://one.kmd-school.example/api/webhooks/razorpay` with **One's**
   `RAZORPAY_WEBHOOK_SECRET`, and only these 11 events — the ones One acts on
   (`HANDLED_EVENTS`); anything else is acknowledged and dropped, so trimming
   the list is tidiness, not safety:
@@ -82,7 +82,7 @@ Then **add** (the one dashboard change, made by the owner at C6, live mode):
 ### 3a. Parents, and the limits they meet (critique1 B16)
 
 - [ ] **A notice to families before the first `_v7` send**, so a Pay now
-  that opens on `one.vpps.co.in` instead of the old address is not taken for
+  that opens on `one.kmd-school.example` instead of the old address is not taken for
   a scam: the `school_notice` template (AiSensy, `docs/cutover/AISENSY-TEMPLATES.md`),
   text approved by the owner, sent by the office from One's school-notice
   screen once the parent-send gate allows `school_notice` (D-353). Not before
@@ -147,7 +147,7 @@ copies the fees app's).
 | `online_payment_auto_posting_enabled` | Automatic posting | **on** — only after the `vp1_` filters are deployed (they are, with this phase) and the imported online rows are terminal (the importer's `TERMINAL_RULES`) |
 | `online_payment_receipts_enabled` | Receipt on WhatsApp | **on** (the parent-send gate, D-353, must also allow `receipt`) |
 | `online_payment_checkout_all_sessions` | One-tap page for every family | **per Q14**: off = TEST sessions only (the pilot); on = every family |
-| `online_payment_checkout_modal_enabled` | Razorpay checkout on the page | **off** until Razorpay approves `one.vpps.co.in` for checkout; off = UPI Payment Link with app buttons, which needs no approval |
+| `online_payment_checkout_modal_enabled` | Razorpay checkout on the page | **off** until Razorpay approves `one.kmd-school.example` for checkout; off = UPI Payment Link with app buttons, which needs no approval |
 | `online_payment_waive_late_fees` | Waive late fees on online payment | **on for 2026-27**; on the year-end checklist to turn off |
 
 Not switches, but set at C7:
@@ -162,7 +162,7 @@ set:
 ```sql
 select cron.schedule('online-payments-reconcile', '*/10 * * * *', $$
   select net.http_get(
-    url := 'https://one.vpps.co.in/api/fees/cron/online-payments',
+    url := 'https://one.kmd-school.example/api/fees/cron/online-payments',
     headers := jsonb_build_object('Authorization', 'Bearer ' ||
       (select decrypted_secret from vault.decrypted_secrets where name = 'VPPS_ONLINE_PAYMENTS_CRON_SECRET')),
     timeout_milliseconds := 55000);

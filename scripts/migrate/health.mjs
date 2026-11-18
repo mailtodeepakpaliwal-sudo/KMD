@@ -3,7 +3,7 @@
  * The health pack in a terminal (go-live Phase G, plan §9.1; critique1 B9).
  * Read-only on One; never touches the fees database.
  *
- *   npm run migrate:health -- [--hours 24] [--json] [--probe https://one.vpps.co.in]
+ *   npm run migrate:health -- [--hours 24] [--json] [--probe https://one.kmd-school.example]
  *
  * Reads `vppsone.ops_health_counts()` through the direct connection
  * (lib/one-db.mjs — One's main project only) and judges it with the app's own
@@ -43,16 +43,16 @@ export function probeOrigin(value) {
   try {
     url = new URL(String(value));
   } catch {
-    throw new Error("--probe takes an origin such as https://one.vpps.co.in");
+    throw new Error("--probe takes an origin such as https://one.kmd-school.example");
   }
   const host = url.hostname;
   const ours =
-    host === "one.vpps.co.in" ||
+    host === "one.kmd-school.example" ||
     host === "localhost" ||
     host === "127.0.0.1" ||
     (/^vpps-?one[a-z0-9-]*\.vercel\.app$/.test(host) && url.protocol === "https:");
   if (!ours) throw new Error(`Refusing to probe ${host}: only One's own hosts.`);
-  if (host === "one.vpps.co.in" && url.protocol !== "https:") throw new Error("one.vpps.co.in is probed over https only.");
+  if (host === "one.kmd-school.example" && url.protocol !== "https:") throw new Error("one.kmd-school.example is probed over https only.");
   return url.origin;
 }
 
@@ -71,7 +71,7 @@ async function probeWebhook(origin, { cutover }) {
 /**
  * The test-only doors, asked cold (no session, no key) — critique1 B17 under
  * the owner's override T1: on production they act for test accounts only, so
- * a stranger must be refused. Observed on one.vpps.co.in, 31 Oct 2026:
+ * a stranger must be refused. Observed on one.kmd-school.example, 31 Oct 2026:
  * `/login/test` 404, `/login/dayrun` 404, `/lab/clock` 404, `/lab/enter`
  * 307 → /lab/ended, `/login/test/clock` 307 → /login.
  */
@@ -83,7 +83,7 @@ export function coldRouteVerdict(status, location = "") {
   if (status >= 300 && status < 400) {
     const to = (() => {
       try {
-        return new URL(location, "https://one.vpps.co.in").pathname;
+        return new URL(location, "https://one.kmd-school.example").pathname;
       } catch {
         return "";
       }

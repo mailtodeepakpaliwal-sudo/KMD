@@ -49,7 +49,7 @@ import { POST as hubWebhook } from "@/app/api/webhooks/whatsapp-hub/route";
 import { POST as templatesJob } from "@/app/api/jobs/whatsapp-templates/route";
 import { handleWhatsAppWebhook } from "@/modules/whatsapp/data/whatsapp-webhook";
 import { APPROVED_HUB, V7_SITUATIONS, V8_SITUATIONS, activeCampaignName, v7CampaignName, v8CampaignName } from "@/modules/whatsapp/domain/campaign-generation";
-import { V7_CAMPAIGNS, V8_CAMPAIGNS } from "@/modules/whatsapp/domain/campaign-bodies-v6";
+import { OFFICE_PHONE, V7_CAMPAIGNS, V8_CAMPAIGNS } from "@/modules/whatsapp/domain/campaign-bodies-v6";
 import { classifyFailure } from "@/modules/whatsapp/domain/failure-cause";
 import { HUB_TEMPLATE_SUBMISSIONS, V8_HUB_SUBMISSIONS, hubExpectedBodies, templatesThatCount } from "@/modules/whatsapp/domain/hub-templates";
 import { readWhatsAppConfig, type WhatsAppConfig } from "@/platform/whatsapp/config";
@@ -264,7 +264,8 @@ describe("the _v8 set", () => {
       expect(submission.category).toBe("UTILITY");
       expect(submission.examples).toHaveLength(5);
       expect(submission.footer).toBeUndefined();
-      expect(submission.buttons.map((button) => button.type)).toEqual(["URL", "PHONE_NUMBER"]);
+      // Call office only once the school has set its number (office-phone.ts).
+      expect(submission.buttons.map((button) => button.type)).toEqual(OFFICE_PHONE ? ["URL", "PHONE_NUMBER"] : ["URL"]);
       expect(submission.buttons[0]).toMatchObject({ url: "https://one.kmd-school.example/pay/{{1}}" });
       expect(submission.body).toBe(hubExpectedBodies().get(submission.name));
       // Never the fees app's number, on a button or anywhere else.

@@ -8,7 +8,7 @@
 | 3 · Substitution photo | Implemented; local checks passed | Date and lesson validation, native cover suggestions, opt-in auto-apply, two-minute notice hold/Undo; isolated PostgreSQL covered replay, conflict rollback and delayed claim. |
 | 4 · Voice | Implemented; local checks passed | Role-filtered commands, scoped absence and availability answers, native writes after confirmation, mocked WebM/MP4 capture and 60-second cutoff. Physical-device/provider verification remains open. |
 | 5 · Admin AI | Implemented | Monthly rupee estimates and provider share, edit rate, recent failures, and adjustable per-staff daily quota. The usage RPC was verified in isolated PostgreSQL. |
-| 6 · Live | **Live for staff since 4 Nov 2026** (`VPPSONE_BUILTIN_AI=live`) | #189 merged as `39c4526a`; deployed with the switch at `test` (`dpl_AXF382EU9jcGRXe7P5bVdPhjXHq4`), then `live` (`dpl_A4kQZT45891zv2SePLpJCaFkTrzv`, aliased to one.vpps.co.in). Migration `20261104055339_builtin_ai_live` applied on wtgx (MD5 of the stored statement equals the file); a rolled-back probe reserved a TEST job and a real-session job and refused a test account in the real session. Full suite 20,563 passed; all 27 CI checks green. See the production evidence below. |
+| 6 · Live | **Live for staff since 4 Nov 2026** (`VPPSONE_BUILTIN_AI=live`) | #189 merged as `39c4526a`; deployed with the switch at `test` (`dpl_AXF382EU9jcGRXe7P5bVdPhjXHq4`), then `live` (`dpl_A4kQZT45891zv2SePLpJCaFkTrzv`, aliased to one.kmd-school.example). Migration `20261104055339_builtin_ai_live` applied on wtgx (MD5 of the stored statement equals the file); a rolled-back probe reserved a TEST job and a real-session job and refused a test account in the real session. Full suite 20,563 passed; all 27 CI checks green. See the production evidence below. |
 
 The initial delivery exercised all three interfaces at 390 px with mocked Storage, capture and API responses. The offline evaluator includes 20 marks lists, 20 substitution slips and six synthetic voice clips.
 
@@ -18,7 +18,7 @@ The existing One project recorded all four AI migrations listed in the README. T
 
 ## Production evidence — 4 November 2026
 
-Admin account in Chrome on one.vpps.co.in; fictional fixtures from `npm run ai:fixtures` / `ai:voice-fixtures`.
+Admin account in Chrome on one.kmd-school.example; fictional fixtures from `npm run ai:fixtures` / `ai:voice-fixtures`.
 
 | Check | Mode, session | Result |
 | --- | --- | --- |
@@ -40,7 +40,7 @@ During the initial production rollout, the provider router recovered from the fo
 
 ## Production key check — 4 November 2026, 15:15 IST
 
-Settings → Built-in AI → Check keys now on one.vpps.co.in: the same probes as `npm run ai:smoke`, run on the server with the production environment values (the report is stored in `builtin_ai_settings.last_smoke`; no key left the server).
+Settings → Built-in AI → Check keys now on one.kmd-school.example: the same probes as `npm run ai:smoke`, run on the server with the production environment values (the report is stored in `builtin_ai_settings.last_smoke`; no key left the server).
 
 | Key | Model | Text | Image or audio |
 | --- | --- | --- | --- |

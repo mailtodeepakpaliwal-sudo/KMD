@@ -153,7 +153,9 @@ function student(id: string, overrides: Record<string, unknown> = {}) {
     admission_no: `TEST-${id}`,
     student_name: `Child ${id}`,
     father_name: `Parent ${id}`,
-    father_phone: "",
+    // A made-up mobile. The VPPS → KMD conversion blanked the old one here,
+    // which left every family unreachable and the whole file failing.
+    father_phone: "9876543210",
     mother_phone: null,
     class_id: "class-1",
     class_label: "Class 1",

@@ -119,7 +119,9 @@ export function helperSystemPrompt(helperName: string): string {
     '- A parent who asks for a result, marks or the report card ("result bhejo", "report card mil jayega?"): set "show" to "results". The child\'s report card is sent here at once as a PDF when the school has issued it, with the results card for any other child; never tell them to collect it or tap anything for it.',
     "- You cannot take a payment, change a record, give a discount, waive a late fee, grant leave or decide anything. For any of these, hand it off.",
     "- Holidays and events: only from the calendar in FACTS.",
-    `- The school office phone is ${OFFICE_PHONE}.`,
+    OFFICE_PHONE
+      ? `- The school office phone is ${OFFICE_PHONE}.`
+      : "- You do not have the school office's phone number. Never give one; offer to pass the message to the office instead.",
     "",
     'HAND-OFFS (set "handoff")',
     '- A worry or complaint about the child: studies, homework, behaviour, health at school, how things are in class, a leave application -> "class_teacher". Set "child".',

@@ -75,12 +75,12 @@ line must be yes at T-1, or T0 moves.
 | The fees app has no automatic campaigns | `node scripts/migrate/fees-quiet-check.mjs` → `fees campaigns with schedule.auto: 0` | Operator |
 | Vault secrets exist (by name) | `select name from vault.secrets where name like 'VPPS_%' order by 1;` — the seven names in `one-live-cron-jobs.sql` | Owner |
 | Public sign-ups are **OFF** on wtgx (Q21, D-355 (1)) | Dashboard → Authentication → Sign In / Providers → "Allow new users to sign up" off; `load-snapshot --apply` refuses otherwise | Owner |
-| Auth on wtgx (plan §9.4, critique1 B17): Site URL `https://one.vpps.co.in` and redirect `https://one.vpps.co.in/**`; custom SMTP from `vpps.co.in` with SPF and DKIM (or the default sender's rate limit accepted in writing); the reset and magic-link emails in Hindi and English. One stays on the same project, so **existing One sessions do not end at C5** (the plan's "new JWT secret" applied to a new project) | Supabase dashboard → Authentication; send a reset to a test account and read it | Owner |
+| Auth on wtgx (plan §9.4, critique1 B17): Site URL `https://one.kmd-school.example` and redirect `https://one.kmd-school.example/**`; custom SMTP from `vpps.co.in` with SPF and DKIM (or the default sender's rate limit accepted in writing); the reset and magic-link emails in Hindi and English. One stays on the same project, so **existing One sessions do not end at C5** (the plan's "new JWT secret" applied to a new project) | Supabase dashboard → Authentication; send a reset to a test account and read it | Owner |
 | Real staff have One logins; test accounts exist and are marked | `/staff`; `select count(*) filter (where is_test_account), count(*) from vppsone.staff_profiles where is_active;` | Admin |
 | Training done | `TRAINING-SHEET.md` signed per role; `ADMIN-OPS-SHEET.md` walked through | Admin |
 | **7 green nightly reconciles in a row** (mirror mode) | `reconcile.mjs` exit 0 seven nights running, reports in the run folders | Operator, Accountant |
 | Env inventory settled | `npm run migrate:env-names -- --check` exit 0 **and** `npm run migrate:env-names -- --vercel` exit 0 (live Production names, both projects, equal to the committed snapshot — names only); `ENV-INVENTORY.md` "To do at C5" list ready | Operator |
-| Health pack quiet (except known items) | `npm run migrate:health -- --probe https://one.vpps.co.in` (webhook "not configured yet" is expected before C6) | Operator |
+| Health pack quiet (except known items) | `npm run migrate:health -- --probe https://one.kmd-school.example` (webhook "not configured yet" is expected before C6) | Operator |
 | A fresh backup restores | `npm run migrate:backup-one` then `-- --restore-test <run>` → OK | Operator |
 | **The rollback restore is rehearsed** (steps 3–4 can only be undone by it) | at rehearsal 1 and 2: `npm run migrate:backup-one -- --restore <run>` (dry run: no `!!` line) then `-- --restore <run> --rollback-only` → `REHEARSAL PASSED`; time it (31 Oct: 37 s for 226 tables / 51,481 rows) | Operator |
 | Alerts reach an admin, or the manual check is staffed | either `vx_staff_ops_alert_v1` approved with a Live campaign **and** an admin's consent recorded (then at T0 `ops_alert` on — see "After 14:00"), or the Operator named for the 08:00 and 16:00 manual health check until T+7 (`PARALLEL-RUN.md` check 1) | Owner |
@@ -414,9 +414,9 @@ C5" (`VPPSONE_ENV=live` with `APP_MODE=production` together, `AISENSY_API_KEY`,
 One-owned Sentry project — never the fees project's), rotate `QA_LOGIN_KEY`,
 then redeploy. `MESSAGE_PROVIDER` and `STAFF_NOTICE_TRANSPORT` stay unset for
 now (no parent or staff WhatsApp yet).
-- **Check:** `https://one.vpps.co.in` loads; a real admin signs in; a test
+- **Check:** `https://one.kmd-school.example` loads; a real admin signs in; a test
   account signs in and sees TEST only; `/login/test` works for a test account
-  only; `npm run migrate:health -- --probe https://one.vpps.co.in` quiet —
+  only; `npm run migrate:health -- --probe https://one.kmd-school.example` quiet —
   which also asks the test-only doors **cold** (no session, no key) and needs
   each refused, as observed on 31 Oct: `/login/test` 404, `/login/dayrun`
   404, `/lab/clock` 404, `/lab/enter` 307 → `/lab/ended`, `/login/test/clock`
@@ -431,10 +431,10 @@ password-reset / sign-in link to the 4 fees users with no One account, and to
 nobody else (D-355 (3)). Staff who already use One keep their login and session (same project).
 
 ### C6 — One's Razorpay webhook (10:45, Owner)
-Razorpay dashboard → Webhooks → add `https://one.vpps.co.in/api/webhooks/razorpay`
+Razorpay dashboard → Webhooks → add `https://one.kmd-school.example/api/webhooks/razorpay`
 with a new secret; put that secret in Vercel Production
 `RAZORPAY_WEBHOOK_SECRET`; redeploy. The fees webhook stays.
-- **Check:** `npm run migrate:health -- --probe https://one.vpps.co.in` →
+- **Check:** `npm run migrate:health -- --probe https://one.kmd-school.example` →
   "401 on a bad signature". From here the `health` job probes the same way
   every morning; after the cutover line a 404 is a problem (an alert), not
   "not configured yet".
@@ -547,7 +547,7 @@ no duplicate-message query hits — `PARALLEL-RUN.md`):
 - **Alerting in the first week.** The `ops_alert` WhatsApp needs staff
   dispatch, the AiSensy transport, an approved `vx_staff_ops_alert_v1` and an
   admin's consent — none of which is on before T+7. So **until T+7 the alert
-  is the Operator**: `npm run migrate:health -- --probe https://one.vpps.co.in`
+  is the Operator**: `npm run migrate:health -- --probe https://one.kmd-school.example`
   at 08:00 and 16:00 IST every day (the go/no-go names who), each `!!` line
   acted on per `ADMIN-OPS-SHEET.md`. If the go/no-go recorded the template
   and consent, the owner may instead turn on staff dispatch at T0 with only

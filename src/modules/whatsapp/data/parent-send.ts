@@ -92,7 +92,7 @@ export function payNowButton(payCode: string, index = 0): TemplateUrlButton {
 export type ParentSendArgs = {
   /** The template's key in `vppsone.whatsapp_templates` (the descriptors' campaign name). */
   campaignName: string;
-  /** E.164 with country code, e.g. +919352205884. */
+  /** E.164 with country code, e.g. +919876543210. */
   destination: string;
   /** The parent's name, for the log. Not necessarily a template variable. */
   userName: string;

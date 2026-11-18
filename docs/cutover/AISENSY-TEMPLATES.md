@@ -11,7 +11,7 @@ then is its name added to `APPROVED_V7`. Nothing here sends.
 Submitted through the AiSensy dashboard (project "Veer Patta Public School", WABA 918047136289)
 on 31 Oct 2026 by duplicating each approved `_v6` template and changing only the name and the
 Pay now button URL. Before each submit, a script checked: body byte-for-byte equal to this
-document, language, category UTILITY, button 1 = URL `https://one.vpps.co.in/pay/{{6}}`,
+document, language, category UTILITY, button 1 = URL `https://one.kmd-school.example/pay/{{6}}`,
 button 2 = phone +91 9352205884, button titles unchanged. `_v6` templates were not edited.
 No API campaign was created and nothing was sent.
 
@@ -66,7 +66,7 @@ and `approvedV6Campaign()` only ever hands out `_v7`.
   the **sixth `templateParams` entry** with no `buttons` key — exactly as `_v6`.
   `tests/fees/unit/whatsapp-campaigns-v7.test.ts` pins six params per notice;
   a template submitted with any other count is answered 400 by AiSensy;
-- **only the button host changed**: `https://one.vpps.co.in/pay/{{1}}`
+- **only the button host changed**: `https://one.kmd-school.example/pay/{{1}}`
   (in Meta's own URL-button editor the variable is `{{1}}`);
 - the same **Call office** phone button and the same samples.
 
@@ -170,7 +170,7 @@ Category **UTILITY** · language **Hindi** · notice `upcoming` · replaces `vpp
 
 ```
 *फीस स्मरण: रु. {{1}} जल्द देय*
-श्री वीर पत्ता सी. सै. स्कूल
+के.एम.डी. पब्लिक स्कूल
 
 विद्यार्थी: {{2}}
 किश्त: {{3}}
@@ -184,7 +184,7 @@ Category **UTILITY** · language **Hindi** · notice `upcoming` · replaces `vpp
 
 Samples: `9,125` · `Aaradhya Gurjar · Class 2` · `किश्त 4` · `20-01-2027` · `रु. 1,000 प्रति किश्त`
 
-Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
+Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
 
 #### `vpps_app_upcoming_en_v7`
 
@@ -192,7 +192,7 @@ Category **UTILITY** · language **English** · notice `upcoming` · replaces `v
 
 ```
 *Fee reminder: Rs. {{1}} due soon*
-Shri Veer Patta Sr. Sec. School
+KMD Public School
 
 For: {{2}}
 Installment: {{3}}
@@ -206,7 +206,7 @@ If you have already paid, kindly ignore this message.
 
 Samples: `9,125` · `Aaradhya Gurjar · Class 2` · `Installment 4` · `20-01-2027` · `Rs. 1,000 per installment`
 
-Buttons: **Pay now** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
+Buttons: **Pay now** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
 
 #### `vpps_app_upcoming_final_hi_v7`
 
@@ -214,7 +214,7 @@ Category **UTILITY** · language **Hindi** · notice `upcoming_final` · replace
 
 ```
 *कुछ ही दिन शेष: रु. {{1}} देय*
-श्री वीर पत्ता सी. सै. स्कूल
+के.एम.डी. पब्लिक स्कूल
 
 विद्यार्थी: {{2}}
 किश्त: {{3}}
@@ -228,7 +228,7 @@ Category **UTILITY** · language **Hindi** · notice `upcoming_final` · replace
 
 Samples: `9,125` · `Aaradhya Gurjar · Class 2` · `किश्त 4` · `20-01-2027` · `रु. 1,000 प्रति किश्त`
 
-Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
+Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
 
 #### `vpps_app_upcoming_final_en_v7`
 
@@ -236,7 +236,7 @@ Category **UTILITY** · language **English** · notice `upcoming_final` · repla
 
 ```
 *Last few days: Rs. {{1}} payable*
-Shri Veer Patta Sr. Sec. School
+KMD Public School
 
 For: {{2}}
 Installment: {{3}}
@@ -250,7 +250,7 @@ Ignore this message if the amount has already been paid.
 
 Samples: `9,125` · `Aaradhya Gurjar · Class 2` · `Installment 4` · `20-01-2027` · `Rs. 1,000 per installment`
 
-Buttons: **Pay now** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
+Buttons: **Pay now** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
 
 #### `vpps_app_fee_due_hi_v7`
 
@@ -258,7 +258,7 @@ Category **UTILITY** · language **Hindi** · notice `fee_due` · replaces `vpps
 
 ```
 *फीस देय: रु. {{1}}*
-श्री वीर पत्ता सी. सै. स्कूल
+के.एम.डी. पब्लिक स्कूल
 
 विद्यार्थी: {{2}}
 किश्त: {{3}}
@@ -272,7 +272,7 @@ Category **UTILITY** · language **Hindi** · notice `fee_due` · replaces `vpps
 
 Samples: `9,125` · `Aaradhya Gurjar · Class 2` · `किश्त 3` · `20-10-2026` · `रु. 1,000 प्रति किश्त`
 
-Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
+Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
 
 #### `vpps_app_fee_due_en_v7`
 
@@ -280,7 +280,7 @@ Category **UTILITY** · language **English** · notice `fee_due` · replaces `vp
 
 ```
 *Fee due: Rs. {{1}}*
-Shri Veer Patta Sr. Sec. School
+KMD Public School
 
 For: {{2}}
 Installment: {{3}}
@@ -294,7 +294,7 @@ If you have already paid, kindly ignore this message.
 
 Samples: `9,125` · `Aaradhya Gurjar · Class 2` · `Installment 3` · `20-10-2026` · `Rs. 1,000 per installment`
 
-Buttons: **Pay now** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
+Buttons: **Pay now** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
 
 #### `vpps_app_balance_hi_v7`
 
@@ -302,7 +302,7 @@ Category **UTILITY** · language **Hindi** · notice `balance` · replaces `vpps
 
 ```
 *शेष फीस: रु. {{1}}*
-श्री वीर पत्ता सी. सै. स्कूल
+के.एम.डी. पब्लिक स्कूल
 
 विद्यार्थी: {{2}}
 अब तक प्राप्त: रु. {{3}}
@@ -316,7 +316,7 @@ Category **UTILITY** · language **Hindi** · notice `balance` · replaces `vpps
 
 Samples: `11,750` · `Aaradhya Gurjar · Class 2` · `6,500` · `20-10-2026` · `रु. 1,000 प्रति किश्त`
 
-Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
+Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
 
 #### `vpps_app_balance_en_v7`
 
@@ -324,7 +324,7 @@ Category **UTILITY** · language **English** · notice `balance` · replaces `vp
 
 ```
 *Fee balance: Rs. {{1}}*
-Shri Veer Patta Sr. Sec. School
+KMD Public School
 
 For: {{2}}
 Received so far: Rs. {{3}}
@@ -338,7 +338,7 @@ If this differs from your own record, tap Call office.
 
 Samples: `11,750` · `Aaradhya Gurjar · Class 2` · `6,500` · `20-10-2026` · `Rs. 1,000 per installment`
 
-Buttons: **Pay now** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
+Buttons: **Pay now** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
 
 #### `vpps_app_overdue_final_hi_v7`
 
@@ -346,7 +346,7 @@ Category **UTILITY** · language **Hindi** · notice `overdue_final` · replaces
 
 ```
 *अंतिम फीस सूचना: रु. {{1}} बकाया*
-श्री वीर पत्ता सी. सै. स्कूल
+के.एम.डी. पब्लिक स्कूल
 
 विद्यार्थी: {{2}}
 बकाया किश्त: {{3}}
@@ -360,7 +360,7 @@ Category **UTILITY** · language **Hindi** · notice `overdue_final` · replaces
 
 Samples: `9,125` · `Aaradhya Gurjar · Class 2` · `किश्त 3` · `10-11-2026` · `रु. 1,000 प्रति किश्त`
 
-Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
+Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
 
 #### `vpps_app_overdue_final_en_v7`
 
@@ -368,7 +368,7 @@ Category **UTILITY** · language **English** · notice `overdue_final` · replac
 
 ```
 *Final fee notice: Rs. {{1}} overdue*
-Shri Veer Patta Sr. Sec. School
+KMD Public School
 
 For: {{2}}
 Installment overdue: {{3}}
@@ -382,7 +382,7 @@ If you have already paid, kindly ignore this message.
 
 Samples: `9,125` · `Aaradhya Gurjar · Class 2` · `Installment 3` · `10-11-2026` · `Rs. 1,000 per installment`
 
-Buttons: **Pay now** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
+Buttons: **Pay now** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
 
 #### `vpps_app_late_fee_waiver_hi_v7`
 
@@ -390,7 +390,7 @@ Category **UTILITY** · language **Hindi** · notice `late_fee_waiver` · replac
 
 ```
 *विलंब शुल्क सूचना: रु. {{1}} फीस शेष*
-श्री वीर पत्ता सी. सै. स्कूल
+के.एम.डी. पब्लिक स्कूल
 
 विद्यार्थी: {{2}}
 किश्त: {{3}}
@@ -404,7 +404,7 @@ Category **UTILITY** · language **Hindi** · notice `late_fee_waiver` · replac
 
 Samples: `9,125` · `Aaradhya Gurjar · Class 2` · `किश्त 3` · `1,000` · `30-10-2026`
 
-Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
+Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
 
 #### `vpps_app_late_fee_waiver_en_v7`
 
@@ -412,7 +412,7 @@ Category **UTILITY** · language **English** · notice `late_fee_waiver` · repl
 
 ```
 *Late fee notice: Rs. {{1}} fees pending*
-Shri Veer Patta Sr. Sec. School
+KMD Public School
 
 For: {{2}}
 Installment: {{3}}
@@ -426,7 +426,7 @@ If you have already paid, kindly ignore this message.
 
 Samples: `9,125` · `Aaradhya Gurjar · Class 2` · `Installment 3` · `1,000` · `30-10-2026`
 
-Buttons: **Pay now** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
+Buttons: **Pay now** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
 
 #### `vpps_app_waiver_last_call_hi_v7`
 
@@ -434,7 +434,7 @@ Category **UTILITY** · language **Hindi** · notice `waiver_last_call` · repla
 
 ```
 *बिना विलंब शुल्क की अंतिम तिथि: रु. {{1}} शेष*
-श्री वीर पत्ता सी. सै. स्कूल
+के.एम.डी. पब्लिक स्कूल
 
 विद्यार्थी: {{2}}
 किश्त: {{3}}
@@ -448,7 +448,7 @@ Category **UTILITY** · language **Hindi** · notice `waiver_last_call` · repla
 
 Samples: `9,125` · `Aaradhya Gurjar · Class 2` · `किश्त 3` · `1,000` · `30-10-2026`
 
-Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
+Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
 
 #### `vpps_app_waiver_last_call_en_v7`
 
@@ -456,7 +456,7 @@ Category **UTILITY** · language **English** · notice `waiver_last_call` · rep
 
 ```
 *Last date without late fee: Rs. {{1}} pending*
-Shri Veer Patta Sr. Sec. School
+KMD Public School
 
 For: {{2}}
 Installment: {{3}}
@@ -470,7 +470,7 @@ Ignore this message if the amount has already been paid.
 
 Samples: `9,125` · `Aaradhya Gurjar · Class 2` · `Installment 3` · `1,000` · `30-10-2026`
 
-Buttons: **Pay now** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
+Buttons: **Pay now** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
 
 #### `vpps_app_promise_due_hi_v7`
 
@@ -478,7 +478,7 @@ Category **UTILITY** · language **Hindi** · notice `promise_due` · replaces `
 
 ```
 *भुगतान तिथि स्मरण: रु. {{1}}*
-श्री वीर पत्ता सी. सै. स्कूल
+के.एम.डी. पब्लिक स्कूल
 
 विद्यार्थी: {{2}}
 बातचीत की तिथि: {{3}}
@@ -492,7 +492,7 @@ Category **UTILITY** · language **Hindi** · notice `promise_due` · replaces `
 
 Samples: `9,125` · `Aaradhya Gurjar · Class 2` · `26-10-2026` · `31-10-2026` · `रु. 1,000 प्रति किश्त`
 
-Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
+Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
 
 #### `vpps_app_promise_due_en_v7`
 
@@ -500,7 +500,7 @@ Category **UTILITY** · language **English** · notice `promise_due` · replaces
 
 ```
 *Payment date reminder: Rs. {{1}}*
-Shri Veer Patta Sr. Sec. School
+KMD Public School
 
 For: {{2}}
 Spoken on: {{3}}
@@ -514,7 +514,7 @@ If the amount has already been paid, tap Call office so the record can be correc
 
 Samples: `9,125` · `Aaradhya Gurjar · Class 2` · `26-10-2026` · `31-10-2026` · `Rs. 1,000 per installment`
 
-Buttons: **Pay now** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
+Buttons: **Pay now** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
 
 #### `vpps_app_promise_lapsed_hi_v7`
 
@@ -522,7 +522,7 @@ Category **UTILITY** · language **Hindi** · notice `promise_lapsed` · replace
 
 ```
 *भुगतान अनुस्मरण: रु. {{1}} शेष*
-श्री वीर पत्ता सी. सै. स्कूल
+के.एम.डी. पब्लिक स्कूल
 
 विद्यार्थी: {{2}}
 दी गई तिथि: {{3}}
@@ -536,7 +536,7 @@ Category **UTILITY** · language **Hindi** · notice `promise_lapsed` · replace
 
 Samples: `9,125` · `Aaradhya Gurjar · Class 2` · `28-10-2026` · `05-11-2026` · `रु. 1,000 प्रति किश्त`
 
-Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
+Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
 
 #### `vpps_app_promise_lapsed_en_v7`
 
@@ -544,7 +544,7 @@ Category **UTILITY** · language **English** · notice `promise_lapsed` · repla
 
 ```
 *Payment follow-up: Rs. {{1}} pending*
-Shri Veer Patta Sr. Sec. School
+KMD Public School
 
 For: {{2}}
 Date given: {{3}}
@@ -558,7 +558,7 @@ If you have already paid, tap Call office so the record can be corrected.
 
 Samples: `9,125` · `Aaradhya Gurjar · Class 2` · `28-10-2026` · `05-11-2026` · `Rs. 1,000 per installment`
 
-Buttons: **Pay now** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
+Buttons: **Pay now** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
 
 #### `vpps_app_exam_clearance_hi_v7`
 
@@ -566,7 +566,7 @@ Category **UTILITY** · language **Hindi** · notice `exam_clearance` · replace
 
 ```
 *परीक्षा से पहले फीस जमा करें: रु. {{1}} शेष*
-श्री वीर पत्ता सी. सै. स्कूल
+के.एम.डी. पब्लिक स्कूल
 
 विद्यार्थी: {{2}}
 शेष किश्तें: {{3}}
@@ -580,7 +580,7 @@ Category **UTILITY** · language **Hindi** · notice `exam_clearance` · replace
 
 Samples: `18,250` · `Aaradhya Gurjar · Class 2` · `किश्त 3 एवं 4` · `15-02-2027` · `रु. 1,000 प्रति किश्त`
 
-Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
+Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
 
 #### `vpps_app_exam_clearance_en_v7`
 
@@ -588,7 +588,7 @@ Category **UTILITY** · language **English** · notice `exam_clearance` · repla
 
 ```
 *Clear fees before exams: Rs. {{1}} pending*
-Shri Veer Patta Sr. Sec. School
+KMD Public School
 
 For: {{2}}
 Installments pending: {{3}}
@@ -602,7 +602,7 @@ If you have already paid, kindly ignore this message.
 
 Samples: `18,250` · `Aaradhya Gurjar · Class 2` · `Installment 3 and 4` · `15-02-2027` · `Rs. 1,000 per installment`
 
-Buttons: **Pay now** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
+Buttons: **Pay now** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
 
 #### `vpps_app_prevyear_hi_v7`
 
@@ -610,7 +610,7 @@ Category **UTILITY** · language **Hindi** · notice `prevyear` · replaces `vpp
 
 ```
 *पिछले सत्र की शेष राशि: रु. {{1}}*
-श्री वीर पत्ता सी. सै. स्कूल
+के.एम.डी. पब्लिक स्कूल
 
 विद्यार्थी: {{2}}
 सत्र: {{3}}
@@ -624,7 +624,7 @@ Category **UTILITY** · language **Hindi** · notice `prevyear` · replaces `vpp
 
 Samples: `20,000` · `Aaradhya Gurjar · Class 2` · `2025-26` · `30-11-2026` · `इस राशि पर लागू नहीं`
 
-Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
+Buttons: **अभी भुगतान करें** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **कार्यालय को कॉल करें** (phone, +919352205884)
 
 #### `vpps_app_prevyear_en_v7`
 
@@ -632,7 +632,7 @@ Category **UTILITY** · language **English** · notice `prevyear` · replaces `v
 
 ```
 *Previous session balance: Rs. {{1}}*
-Shri Veer Patta Sr. Sec. School
+KMD Public School
 
 For: {{2}}
 Session: {{3}}
@@ -646,4 +646,4 @@ For a full statement, tap Call office.
 
 Samples: `20,000` · `Aaradhya Gurjar · Class 2` · `2025-26` · `30-11-2026` · `Not applicable on this amount`
 
-Buttons: **Pay now** (URL, dynamic — `https://one.vpps.co.in/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)
+Buttons: **Pay now** (URL, dynamic — `https://one.kmd-school.example/pay/{{1}}`, sample suffix `pc_sample`; AiSensy numbers it `{{6}}`) · **Call office** (phone, +919352205884)

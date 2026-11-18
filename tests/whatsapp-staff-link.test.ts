@@ -96,7 +96,7 @@ describe("finding a code in a message", () => {
   it("finds the prepared message, in either language, however the code is written", () => {
     expect(linkCodeIn(linkMessage("ABCD2345", "en"))).toEqual({ code: "ABCD2345", labelled: true });
     expect(linkCodeIn(linkMessage("ABCD2345", "hi"))).toEqual({ code: "ABCD2345", labelled: true });
-    expect(linkCodeIn("please link vpps one code abcd 2345 thanks")).toEqual({ code: "ABCD2345", labelled: true });
+    expect(linkCodeIn("please link kmd one code abcd 2345 thanks")).toEqual({ code: "ABCD2345", labelled: true });
     expect(linkCodeIn("KMD One code: ABCD2345")).toEqual({ code: "ABCD2345", labelled: true });
   });
 

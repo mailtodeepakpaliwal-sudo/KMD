@@ -157,6 +157,7 @@ export const mc = {
   upiShow: t("यह अभिभावक को दिखाएँ · {a}", "Show this to the parent · {a}"),
   upiNoRef: t("संदर्भ नंबर ज़रूरी नहीं। अभिभावक भुगतान दिखा दें तो सहेजें।", "No reference number needed. Save once the parent shows the payment done."),
   upiTestOnly: t("परीक्षण सत्र में QR नहीं दिखता।", "No QR in the test session."),
+  upiNotSetUp: t("स्कूल की UPI ID अभी सेट नहीं है, इसलिए QR नहीं दिखता।", "No QR: the school's UPI ID is not set up yet."),
   qrTitle: t("{a} के लिए स्कैन करें", "Scan to pay {a}"),
   qrNote: t("राशि और SR नंबर इसमें पहले से हैं।", "The amount and the SR number are already in it."),
   qrDone: t("हो गया", "Done"),

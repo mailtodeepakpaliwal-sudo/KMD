@@ -17,12 +17,12 @@ function harness(options: { sourceFailed?: boolean; leak?: boolean; badImage?: b
     const headers = new Headers(init?.headers);
     if(url.origin.includes("supabase")) return Response.json({ id: actorId, is_anonymous: false });
     if(url.pathname.includes("/photo")||url.pathname.includes("/documents/")) {
-      if(url.origin.includes("one.vpps") && !headers.has("cookie")) return options.denialRedirect?new Response(options.denialRedirect.body??null,{status:options.denialRedirect.status??307,headers:{Location:options.denialRedirect.location(url),...(options.denialRedirect.contentType?{"Content-Type":options.denialRedirect.contentType}:{})}}):new Response(null,{status:401});
-      if((options.authenticatedRedirect==="one_photo"&&url.origin.includes("one.vpps"))||(options.authenticatedRedirect==="source_photo"&&url.origin.includes("fees.vpps")))return new Response(null,{status:307,headers:{Location:loginLocation(url)}});
+      if(url.origin.includes("one.kmd-school") && !headers.has("cookie")) return options.denialRedirect?new Response(options.denialRedirect.body??null,{status:options.denialRedirect.status??307,headers:{Location:options.denialRedirect.location(url),...(options.denialRedirect.contentType?{"Content-Type":options.denialRedirect.contentType}:{})}}):new Response(null,{status:401});
+      if((options.authenticatedRedirect==="one_photo"&&url.origin.includes("one.kmd-school"))||(options.authenticatedRedirect==="source_photo"&&url.origin.includes("fees.kmd-school")))return new Response(null,{status:307,headers:{Location:loginLocation(url)}});
       if(url.pathname.includes("/documents/"))return new Response("%PDF-1.7 synthetic stored document",{headers:{"Content-Type":"application/pdf","Cache-Control":"private, no-store"}});
-      return new Response(new Uint8Array([255,216,255,options.badImage && url.origin.includes("one.vpps") ? 2 : 1]), { headers: { "Content-Type":"image/jpeg", "Cache-Control":"private, no-store", Vary:"Cookie" } });
+      return new Response(new Uint8Array([255,216,255,options.badImage && url.origin.includes("one.kmd-school") ? 2 : 1]), { headers: { "Content-Type":"image/jpeg", "Cache-Control":"private, no-store", Vary:"Cookie" } });
     }
-    if(url.origin.includes("fees.vpps")) {
+    if(url.origin.includes("fees.kmd-school")) {
       if(!headers.has("x-one-bridge-key")) return json(null,401);
       if(url.searchParams.get("session") !== "2026-27") return json(null,403);
       if(url.pathname.endsWith("/directory")) return json({ sessionLabel:"2026-27", students:[{id:studentId,classId,admissionNo:"SYNTHETIC",hasPhoto:true}], pagination:{page:1,totalCount:1,hasMore:false},summary:{studentCount:1} });

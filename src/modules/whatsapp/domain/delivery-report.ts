@@ -87,7 +87,7 @@ export function readDeliveryStatus(value: string | null | undefined): DeliverySt
   return null;
 }
 
-/** Digits only. `+91 93522 05884`, `919352205884` and `9352205884` all match. */
+/** Digits only. `+91 98765 43210`, `919876543210` and `9876543210` all match. */
 export function phoneDigits(value: string | null | undefined): string | null {
   const digits = String(value ?? "").replace(/\D/g, "");
   if (digits.length < 10) return null;

@@ -16,7 +16,7 @@ describe("originFromHeaders", () => {
       originFromHeaders(
         headersOf({ host: "internal", "x-forwarded-host": "KMD-One.vercel.app, other", "x-forwarded-proto": "https" }),
       ),
-    ).toBe("https://vpps-one.vercel.app");
+    ).toBe("https://kmd-one.vercel.app");
     expect(originFromHeaders(headersOf({ host: "localhost:3000", "x-forwarded-proto": "http" }))).toBe(
       "http://localhost:3000",
     );

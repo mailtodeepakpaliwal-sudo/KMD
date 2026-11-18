@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import * as scriptGuard from "../scripts/target-guard.mjs";
-import { declaresProduction, isConfinedDeployment } from "@/platform/deployment/confinement";
+import { allowsLocalFeeWrites, declaresProduction, isConfinedDeployment } from "@/platform/deployment/confinement";
 import {
   effectiveEnvironment,
   environmentFromMarkerRows,
@@ -34,6 +34,29 @@ describe("isConfinedDeployment — the single definition", () => {
 
   it("reads the real process (a test run is confined)", () => {
     expect(isConfinedDeployment()).toBe(process.env.VERCEL_ENV !== "production");
+  });
+});
+
+describe("allowsLocalFeeWrites — KMD's local opt-in, own machine only", () => {
+  const local = { KMD_LOCAL_FEE_WRITES: "open", NODE_ENV: "development" };
+
+  it("frees fee writes only for next dev with the explicit flag", () => {
+    expect(allowsLocalFeeWrites(local)).toBe(true);
+    expect(allowsLocalFeeWrites({ ...local, KMD_LOCAL_FEE_WRITES: " open " })).toBe(true);
+  });
+
+  it("stays shut without the exact flag, outside next dev, or on any Vercel build", () => {
+    expect(allowsLocalFeeWrites({ NODE_ENV: "development" })).toBe(false);
+    expect(allowsLocalFeeWrites({ ...local, KMD_LOCAL_FEE_WRITES: "true" })).toBe(false);
+    expect(allowsLocalFeeWrites({ ...local, NODE_ENV: "production" })).toBe(false);
+    expect(allowsLocalFeeWrites({ ...local, NODE_ENV: "test" })).toBe(false);
+    expect(allowsLocalFeeWrites({ ...local, VERCEL: "1" })).toBe(false);
+    expect(allowsLocalFeeWrites({ ...local, VERCEL_ENV: "preview" })).toBe(false);
+  });
+
+  it("does not unconfine the deployment itself", () => {
+    expect(allowsLocalFeeWrites(local)).toBe(true);
+    expect(isConfinedDeployment(local)).toBe(true);
   });
 });
 

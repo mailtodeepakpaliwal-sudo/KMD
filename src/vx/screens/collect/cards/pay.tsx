@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { mc } from "@/messages/collect";
 import { changeDue, checkSplit, NOTE_DENOMINATIONS, notesTotal, receivedSuggestions, shapeChequeDate, splitSuggestions, type CollectMode, type LedgerMode, type NoteCount } from "@/modules/collect/domain/cash";
 import { dateStrip, daysBetween, monthBounds, monthGrid, shiftMonth } from "@/modules/collect/domain/dates";
-import { buildStudentFeeUpiPayment } from "@/modules/payments/domain/upi";
+import { buildStudentFeeUpiPayment, schoolUpiConfigured } from "@/modules/payments/domain/upi";
 import type { Localized } from "@/platform/i18n/language";
 import { monthP } from "@/vx/format";
 
@@ -28,7 +28,8 @@ const WEEK = ["2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04", "2026-11-0
 function UpiQr({ amount, sr, big, show }: { amount: number; sr: string; big?: boolean; show: boolean }) {
   const { p } = useCx();
   const [src, setSrc] = useState<{ key: string; url: string } | null>(null);
-  const uri = show && amount > 0 ? buildStudentFeeUpiPayment({ admissionNo: sr, amount }).uri : "";
+  const configured = schoolUpiConfigured();
+  const uri = show && configured && amount > 0 ? buildStudentFeeUpiPayment({ admissionNo: sr, amount }).uri : "";
   useEffect(() => {
     if (!uri) return;
     let live = true;
@@ -43,6 +44,7 @@ function UpiQr({ amount, sr, big, show }: { amount: number; sr: string; big?: bo
     };
   }, [uri, big]);
   if (!show) return <span className="ph"><small>{p(mc.upiTestOnly)}</small></span>;
+  if (!configured) return <span className="ph"><small>{p(mc.upiNotSetUp)}</small></span>;
   // eslint-disable-next-line @next/next/no-img-element
   return src && src.key === uri ? <img src={src.url} alt="UPI QR" /> : <span className="ph"><Icon name="qr" size={28} /></span>;
 }

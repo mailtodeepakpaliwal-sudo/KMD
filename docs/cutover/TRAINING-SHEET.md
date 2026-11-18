@@ -10,8 +10,8 @@ bottom line, and the signed sheet is that role's acceptance for sign-off
 
 ## 1. Accountant / fee desk — लेखाकार / फ़ीस काउंटर
 
-**From Monday 14 Dec, fees are taken in One: `one.vpps.co.in`. The old fees app is for looking up only.**
-**14 दिसंबर (सोमवार) से फ़ीस One में ली जाएगी: `one.vpps.co.in`। पुराना फ़ीस ऐप सिर्फ़ देखने के लिए है।**
+**From Monday 14 Dec, fees are taken in One: `one.kmd-school.example`. The old fees app is for looking up only.**
+**14 दिसंबर (सोमवार) से फ़ीस One में ली जाएगी: `one.kmd-school.example`। पुराना फ़ीस ऐप सिर्फ़ देखने के लिए है।**
 
 | Do this / यह करें | Where / कहाँ |
 |---|---|

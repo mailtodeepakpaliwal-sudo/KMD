@@ -1,3 +1,4 @@
+import { OFFICE_PHONE_E164 } from "@/platform/config/office-phone";
 import { formatRupeesPlain } from "@/platform/helpers/currency";
 import {
   ledgerLateFeePhrase,
@@ -88,7 +89,12 @@ export type V6Context = {
   lastYear?: boolean;
 };
 
-export const OFFICE_PHONE = "+919352205884";
+/**
+ * The Call office button's number: the school's own, or "" until
+ * `NEXT_PUBLIC_SCHOOL_PHONE` is set, when the button is left off the
+ * templates (`hub-templates.ts`). It was the old school's number (18 Nov 2026).
+ */
+export const OFFICE_PHONE = OFFICE_PHONE_E164;
 /**
  * Where a `_v7` Pay now button opens: the URL submitted to Meta, with the
  * send's pay code as its `{{1}}` suffix. The `_v6` buttons open the fees

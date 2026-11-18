@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { STAFF_TEMPLATES, TEACHER_TASK_TEMPLATES } from "@/modules/staff-notices/domain/templates";
+import { OFFICE_PHONE } from "@/modules/whatsapp/domain/campaign-bodies-v6";
 import {
   HUB_TEMPLATE_SUBMISSIONS,
   SCHOOL_NOTICE_HUB_SUBMISSIONS,
@@ -212,7 +213,9 @@ describe("the parents' school notices on the hub", () => {
     for (const submission of SCHOOL_NOTICE_HUB_SUBMISSIONS) {
       expect(submission.name).toMatch(/^vpps_school_(absent|closed|exam_schedule|ptm)_(hi|en)_v1$/);
       expect(metaShapeProblems(submission.body, submission.examples)).toEqual([]);
-      expect(submission.buttons).toEqual([{ type: "PHONE_NUMBER", text: expect.any(String), phone_number: "+919352205884" }]);
+      // Call office with the school's own number, and no button until it is set.
+      expect(submission.buttons).toEqual(OFFICE_PHONE ? [{ type: "PHONE_NUMBER", text: expect.any(String), phone_number: OFFICE_PHONE }] : []);
+      expect(JSON.stringify(submission)).not.toMatch(/9352205884/);
       // Never the fees app's number.
       expect(JSON.stringify(submission)).not.toMatch(/8047136289/);
       const row = seeded.get(submission.name);

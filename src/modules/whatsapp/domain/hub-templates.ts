@@ -36,11 +36,14 @@ export function hubTemplateSubmission(entry: V6Descriptor): TemplateSubmission {
     category: "UTILITY",
     body: entry.body,
     examples: [...entry.metaSamples],
-    buttons: entry.buttons.map((button) =>
-      button === "pay_url"
-        ? { type: "URL" as const, text: labels.pay_url, url: `${PAY_URL_PREFIX}{{1}}` }
-        : { type: "PHONE_NUMBER" as const, text: labels.call_office, phone_number: OFFICE_PHONE },
-    ),
+    // No Call office button until the school has set its number (OFFICE_PHONE).
+    buttons: entry.buttons
+      .filter((button) => button === "pay_url" || OFFICE_PHONE)
+      .map((button) =>
+        button === "pay_url"
+          ? { type: "URL" as const, text: labels.pay_url, url: `${PAY_URL_PREFIX}{{1}}` }
+          : { type: "PHONE_NUMBER" as const, text: labels.call_office, phone_number: OFFICE_PHONE },
+      ),
   };
 }
 
@@ -59,7 +62,9 @@ export const SCHOOL_NOTICE_HUB_SUBMISSIONS: readonly TemplateSubmission[] = SCHO
   category: "UTILITY" as const,
   body: entry.body,
   examples: [...entry.metaSamples],
-  buttons: [{ type: "PHONE_NUMBER" as const, text: V6_BUTTON_LABELS[entry.language].call_office, phone_number: OFFICE_PHONE }],
+  buttons: OFFICE_PHONE
+    ? [{ type: "PHONE_NUMBER" as const, text: V6_BUTTON_LABELS[entry.language].call_office, phone_number: OFFICE_PHONE }]
+    : [],
 }));
 
 /**

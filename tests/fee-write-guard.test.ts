@@ -17,7 +17,10 @@ vi.mock("@/platform/env", () => ({
   getOptionalEnvVar: (name: string) => (name === "SUPABASE_SERVICE_ROLE_KEY" ? "synthetic-service-key" : undefined),
   getServerSupabaseUrl: () => "https://uvvusynovvhtacauvrzc.supabase.co",
 }));
-vi.mock("@/platform/deployment/confinement", () => ({ isConfinedDeployment: () => mocks.confined.value }));
+vi.mock("@/platform/deployment/confinement", () => ({
+  isConfinedDeployment: () => mocks.confined.value,
+  allowsLocalFeeWrites: () => false,
+}));
 // The real combination rule: this "deployment" declares production exactly
 // when it is not confined (VERCEL_ENV=production).
 vi.mock("@/platform/deployment/marker", async () => {

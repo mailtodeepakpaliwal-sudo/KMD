@@ -27,6 +27,29 @@ export function isConfinedDeployment(
 }
 
 /**
+ * KMD's local opt-in to fee writes (18 Nov 2026, owner's choice). Fee setup
+ * writes school-wide rows (school defaults, transport routes, its own change
+ * history) that the confined write guard can never place in a TEST session,
+ * so on a confined deployment Fee setup could not be saved at all.
+ *
+ * This frees FEE WRITES ONLY — users are still test accounts, messages are
+ * still allowlisted — and only on the owner's own machine: it needs
+ * `KMD_LOCAL_FEE_WRITES=open` in `.env.local`, a `next dev` process, and no
+ * Vercel variables at all, so no Preview or other Vercel build can ever turn
+ * it on. The database's `fee_writes_enabled` still decides after this.
+ */
+export function allowsLocalFeeWrites(
+  env: { readonly [name: string]: string | undefined } = process.env,
+): boolean {
+  return (
+    env.KMD_LOCAL_FEE_WRITES?.trim() === "open" &&
+    env.NODE_ENV === "development" &&
+    !env.VERCEL &&
+    !env.VERCEL_ENV
+  );
+}
+
+/**
  * Does this deployment declare itself production, whatever the database
  * marker says? (D-346; review of PR #141)
  *

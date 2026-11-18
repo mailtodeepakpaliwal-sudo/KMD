@@ -96,7 +96,7 @@ describe("Link my WhatsApp", () => {
     expect(open?.getAttribute("target")).toBe("_blank");
     expect(host.querySelector("pre")?.textContent).toBe(LINK.message);
     // The number is held together by no-break spaces, so it never wraps across two lines.
-    expect(host.textContent).toContain("Send this message to +91\u00a083022\u00a007823");
+    expect(host.textContent).toContain("Send this message to +91\u00a000000\u00a000000");
     expect(host.querySelector<HTMLImageElement>(".lw-qr img")?.getAttribute("src")).toBe(LINK.qr);
   });
 
